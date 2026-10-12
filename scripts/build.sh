@@ -2,6 +2,7 @@
 # Build TypeScript's Go port (tsc) to wasm with TinyGo.
 # usage: scripts/build.sh [wasip1|wasm ...] (default: wasip1 wasm)
 # Extra tinygo flags can be passed via TINYGO_FLAGS (default: -no-debug).
+# SUFFIX names variant outputs, e.g. SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" -> out/tsc-o2.wasip1.wasm
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,9 +30,9 @@ export GOWORK=off
 pids=()
 for t in "${targets[@]}"; do
   # shellcheck disable=SC2086
-  (cd "$ts/tsc" && tinygo build -target="$t" -stack-size="$stack_size" ${TINYGO_FLAGS:--no-debug} -o "$out/tsc.$t.wasm" ./cmd/tsc) &
+  (cd "$ts/tsc" && tinygo build -target="$t" -stack-size="$stack_size" ${TINYGO_FLAGS:--no-debug} -o "$out/tsc${SUFFIX:-}.$t.wasm" ./cmd/tsc) &
   pids+=($!)
 done
 for pid in "${pids[@]}"; do wait "$pid"; done
 
-ls -la "$out"/tsc.*.wasm
+ls -la "$out"/tsc${SUFFIX:-}.*.wasm

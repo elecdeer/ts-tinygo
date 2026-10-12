@@ -1,4 +1,5 @@
 [tools]
-"aqua:WebAssembly/binaryen" = "latest"
+"aqua:WebAssembly/binaryen" = "133"
+"github:sharkdp/hyperfine" = "2.0.0"
 go = "1.27.2"
 tinygo = "0.43.0"
