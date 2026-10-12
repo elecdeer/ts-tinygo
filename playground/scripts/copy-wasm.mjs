@@ -10,6 +10,7 @@ const destDir = join(root, "public", "wasm");
 const builds = [
   { from: "tsc.wasip1.wasm", to: "tsc-tinygo.wasm", hint: "scripts/build.sh wasip1" },
   { from: "tsc-go.wasip1.wasm", to: "tsc-go.wasm", hint: "scripts/build-go.sh wasip1" },
+  { from: "ts-rust.wasm", to: "ts-rust.wasm", hint: "scripts/build-ts-rust.sh wasm" },
 ];
 
 await mkdir(destDir, { recursive: true });

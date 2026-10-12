@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Engine } from "./lib/engines";
 import type { RunResult, SourceFiles } from "./lib/runner";
 import type { RunRequest, WorkerResponse } from "./worker/protocol";
 import TscWorker from "./worker/tsc.worker?worker";
@@ -15,7 +16,7 @@ export interface TscRunner {
   result: RunResult | undefined;
   error: string | undefined;
   wasm: WasmInfo | undefined;
-  run: (wasmUrl: string, files: SourceFiles, args: string[]) => void;
+  run: (engine: Pick<Engine, "kind" | "url">, files: SourceFiles, args: string[]) => void;
 }
 
 type PendingRun = Omit<RunRequest, "type" | "id">;
@@ -91,8 +92,8 @@ export function useTscRunner(): TscRunner {
   }, [start]);
 
   const run = useCallback(
-    (wasmUrl: string, files: SourceFiles, args: string[]) => {
-      const request: PendingRun = { wasmUrl, files, args };
+    (engine: Pick<Engine, "kind" | "url">, files: SourceFiles, args: string[]) => {
+      const request: PendingRun = { kind: engine.kind, wasmUrl: engine.url, files, args };
       if (busyRef.current) {
         queuedRef.current = request;
       } else {

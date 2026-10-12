@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { runTsc } from "../lib/runner";
+import { runTsRust } from "../lib/runner-ts-rust";
 import type { RunRequest, WorkerResponse } from "./protocol";
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -40,12 +41,12 @@ function reply(response: WorkerResponse): void {
 }
 
 self.addEventListener("message", async (event: MessageEvent<RunRequest>) => {
-  const { id, wasmUrl, files, args } = event.data;
+  const { id, kind, wasmUrl, files, args } = event.data;
   try {
     const loadStart = performance.now();
     const { module, bytes } = await loadModule(wasmUrl);
     reply({ type: "loaded", id, wasmBytes: bytes, loadMs: performance.now() - loadStart });
-    const result = await runTsc(module, files, args);
+    const result = kind === "ts-rust" ? await runTsRust(module, files, args) : await runTsc(module, files, args);
     reply({ type: "result", id, result });
   } catch (error) {
     reply({ type: "error", id, message: error instanceof Error ? `${error.name}: ${error.message}` : String(error) });

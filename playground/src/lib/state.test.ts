@@ -26,6 +26,11 @@ describe("deserializeState", () => {
     expect(deserializeState(hash)).toEqual(DEFAULT_STATE);
   });
 
+  it("accepts every engine id", () => {
+    const hash = encodeBase64Url(JSON.stringify({ ...DEFAULT_STATE, engine: "ts-rust" }));
+    expect(deserializeState(hash).engine).toBe("ts-rust");
+  });
+
   it("uses default files when none are given", () => {
     const hash = encodeBase64Url(JSON.stringify({ files: {}, args: "-v", engine: "tinygo" }));
     expect(deserializeState(hash)).toEqual({ ...DEFAULT_STATE, args: "-v" });

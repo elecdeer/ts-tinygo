@@ -1,6 +1,8 @@
 import type { SourceFiles } from "./runner";
 
-export type EngineId = "tinygo" | "go";
+export type EngineId = "tinygo" | "go" | "ts-rust";
+
+export const ENGINE_IDS: readonly EngineId[] = ["tinygo", "go", "ts-rust"];
 
 export interface PlaygroundState {
   files: SourceFiles;
@@ -82,7 +84,7 @@ export function deserializeState(hash: string): PlaygroundState {
     return {
       files: Object.keys(files).length > 0 ? files : DEFAULT_STATE.files,
       args: typeof candidate.args === "string" ? candidate.args : DEFAULT_STATE.args,
-      engine: candidate.engine === "go" || candidate.engine === "tinygo" ? candidate.engine : DEFAULT_STATE.engine,
+      engine: ENGINE_IDS.find((id) => id === candidate.engine) ?? DEFAULT_STATE.engine,
     };
   } catch {
     return DEFAULT_STATE;

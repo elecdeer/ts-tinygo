@@ -1,8 +1,10 @@
+import type { EngineKind } from "../lib/engines";
 import type { RunResult, SourceFiles } from "../lib/runner";
 
 export interface RunRequest {
   type: "run";
   id: number;
+  kind: EngineKind;
   wasmUrl: string;
   files: SourceFiles;
   args: string[];

@@ -50,10 +50,10 @@ export function App() {
   const { run } = runner;
   useEffect(() => {
     const timer = setTimeout(() => {
-      run(engine.url, state.files, [...DEFAULT_ARGS, ...tokenizeArgs(state.args)]);
+      run(engine, state.files, [...DEFAULT_ARGS, ...tokenizeArgs(state.args)]);
     }, RUN_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [run, engine.url, state.files, state.args]);
+  }, [run, engine, state.files, state.args]);
 
   useEffect(() => disposeStaleModels("source", fileNames), [fileNames]);
 
