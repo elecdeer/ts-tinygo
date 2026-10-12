@@ -2,7 +2,7 @@
 # Compare tsc type-check time across native Go, standard Go wasip1 and TinyGo wasip1.
 # usage: bench/run.sh <project-dir> <tsconfig> [runs]
 # SKIP_TIMING=1 only measures peak memory.
-# Prerequisites: scripts/build-go.sh, scripts/build.sh wasip1
+# Prerequisites: scripts/build-go.sh, scripts/build.sh wasip1, (optional) scripts/build-ts-rust.sh
 #   (optional) SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" scripts/build.sh wasip1
 set -euo pipefail
 
@@ -26,6 +26,12 @@ add "native --singleThreaded" "$out/tsc-native $args --singleThreaded"
 add "Go wasip1 --singleThreaded" "$wasi $out/tsc-go.wasip1.wasm $args --singleThreaded"
 add "TinyGo -opt=z --singleThreaded" "$wasi $out/tsc.wasip1.wasm $args --singleThreaded"
 [ -f "$out/tsc-o2.wasip1.wasm" ] && add "TinyGo -opt=2 --singleThreaded" "$wasi $out/tsc-o2.wasip1.wasm $args --singleThreaded"
+# pingdotgg/ts-rust (scripts/build-ts-rust.sh). Its wasm build is driven by its own JS glue, not WASI's _start.
+tsrust="node --no-warnings $root/scripts/run-ts-rust.mjs"
+[ -f "$out/ts-rust-native" ] && add "ts-rust native (parallel)" "$out/ts-rust-native $args"
+[ -f "$out/ts-rust-native" ] && add "ts-rust native --singleThreaded" "$out/ts-rust-native $args --singleThreaded"
+[ -f "$out/ts-rust.wasm" ] && add "ts-rust wasm opt-level=z" "$tsrust $out/ts-rust.wasm $args --singleThreaded"
+[ -f "$out/ts-rust-s.wasm" ] && add "ts-rust wasm opt-level=s" "$tsrust $out/ts-rust-s.wasm $args --singleThreaded"
 
 hf=()
 for i in "${!cmds[@]}"; do hf+=(-n "${names[$i]}" "${cmds[$i]}"); done

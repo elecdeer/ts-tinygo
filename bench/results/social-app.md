@@ -1,7 +1,11 @@
 | Command | Mean Wall Time [s] | Change | Factor |
 |:---|---:|---:|:---|
-| `native (parallel)` | 1.318 ± 0.063 |  |  |
-| `native --singleThreaded` | 2.775 ± 0.061 | +110.6% | (2.1x slower) |
-| `Go wasip1 --singleThreaded` | 14.655 ± 1.095 | +1012.2% | (11.1x slower) |
-| `TinyGo -opt=z --singleThreaded` | 20.760 ± 0.239 | +1475.6% | (15.8x slower) |
-| `TinyGo -opt=2 --singleThreaded` | 20.651 ± 0.907 | +1467.3% | (15.7x slower) |
+| `native (parallel)` | 1.209 ± 0.019 |  |  |
+| `native --singleThreaded` | 2.661 ± 0.093 | +120.2% | (2.2x slower) |
+| `Go wasip1 --singleThreaded` | 14.963 ± 0.029 | +1137.8% | (12.4x slower) |
+| `TinyGo -opt=z --singleThreaded` | 20.969 ± 0.050 | +1634.6% | (17.3x slower) |
+| `TinyGo -opt=2 --singleThreaded` | 20.360 ± 0.113 | +1584.3% | (16.8x slower) |
+| `ts-rust native (parallel)` | 0.728 ± 0.025 | -39.7% | (1.7x faster) |
+| `ts-rust native --singleThreaded` | 1.875 ± 0.020 | +55.1% | (1.6x slower) |
+| `ts-rust wasm opt-level=z` | 5.882 ± 0.257 | +386.6% | (4.9x slower) |
+| `ts-rust wasm opt-level=s` | 4.997 ± 0.012 | +313.4% | (4.1x slower) |

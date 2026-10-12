@@ -1,3 +1,6 @@
 [submodule "TypeScript"]
 	path = TypeScript
 	url = https://github.com/microsoft/TypeScript.git
+[submodule "ts-rust"]
+	path = ts-rust
+	url = https://github.com/pingdotgg/ts-rust.git
