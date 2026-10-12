@@ -1,0 +1,4 @@
+[tools]
+"aqua:WebAssembly/binaryen" = "latest"
+go = "1.27.2"
+tinygo = "0.43.0"
