@@ -2,7 +2,8 @@
 # Compare tsc type-check time across native Go, standard Go wasip1 and TinyGo wasip1.
 # usage: bench/run.sh <project-dir> <tsconfig> [runs]
 # SKIP_TIMING=1 only measures peak memory.
-# Prerequisites: scripts/build-go.sh, scripts/build.sh wasip1, (optional) scripts/build-ts-rust.sh
+# Prerequisites: scripts/build-go.sh, scripts/build.sh wasip1,
+#   (optional) scripts/build-ts-rust.sh, pnpm --dir bench/ts6 install
 #   (optional) SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" scripts/build.sh wasip1
 set -euo pipefail
 
@@ -21,6 +22,9 @@ args="-p $tsconfig --noEmit"
 cmds=()
 names=()
 add() { names+=("$1"); cmds+=("$2"); }
+# TypeScript 6, the JavaScript tsc (bench/ts6: pnpm install). It has no --singleThreaded; it is single-threaded.
+ts6="$root/bench/ts6/node_modules/typescript/bin/tsc"
+[ -f "$ts6" ] && add "TS6 (JS tsc on Node)" "node $ts6 $args"
 add "native (parallel)" "$out/tsc-native $args"
 add "native --singleThreaded" "$out/tsc-native $args --singleThreaded"
 add "Go wasip1 --singleThreaded" "$wasi $out/tsc-go.wasip1.wasm $args --singleThreaded"

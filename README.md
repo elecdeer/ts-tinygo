@@ -76,49 +76,54 @@ pnpm run dev
 ## Benchmark
 
 ```sh
+pnpm --dir bench/ts6 install                    # TypeScript 6 baseline
 bench/run.sh examples/basic tsconfig.json 10   # needs the builds above (ts-rust optional)
 bench/run.sh bench/repos/social-app tsconfig.check.web.json 3
 ```
 
-Results on an Apple Silicon Mac (14 cores, 48GB), Node.js 26, TinyGo 0.43, Go 1.27.2, Rust 1.99.
-Wall time includes Node.js startup and V8 compiling the wasm module. Raw data is in `bench/results/`.
+Results on an Apple Silicon Mac (14 cores, 48GB), Node.js 26, TypeScript 6.0.3, TinyGo 0.43, Go 1.27.2, Rust 1.99.
+Wall time includes Node.js startup and, for wasm, V8 compiling the module. Speedup is relative to TypeScript 6 (the JavaScript tsc).
+Raw data is in `bench/results/`.
 
 **[bluesky-social/social-app](https://github.com/bluesky-social/social-app)** (`tsconfig.check.web.json`: 4,989 files, 565k lines, no errors; the "bluesky" row of the TS 7.0 announcement benchmark)
 
-| variant | module | wall time | vs tsc native | peak RSS |
+| variant | module | wall time | speedup vs TS6 | peak RSS |
 |---|---:|---:|---:|---:|
-| tsc native (parallel) | | 1.21 s | 1.0x | 1.42 GB |
-| tsc native `--singleThreaded` | | 2.66 s | 2.2x | 1.00 GB |
-| tsc, Go wasip1 | 51.2 MB | 15.0 s | 12.4x | 1.59 GB |
-| tsc, TinyGo wasip1 `-opt=z` | 20.9 MB | 21.0 s | 17.3x | 1.93 GB |
-| tsc, TinyGo wasip1 `-opt=2` | 28.1 MB | 20.4 s | 16.8x | 2.12 GB |
-| ts-rust native (parallel) | | 0.73 s | 0.6x | 1.06 GB |
-| ts-rust native `--singleThreaded` | | 1.88 s | 1.6x | 0.74 GB |
-| ts-rust wasm `opt-level=z` | 4.8 MB | 5.88 s | 4.9x | 0.76 GB |
-| ts-rust wasm `opt-level=s` | 6.0 MB | 5.00 s | 4.1x | 0.79 GB |
+| **TS6** (JS tsc on Node) | | 9.25 s | 1.0x | 1.70 GB |
+| tsc native (parallel) | | 1.26 s | 7.3x | 1.51 GB |
+| tsc native `--singleThreaded` | | 2.63 s | 3.5x | 1.09 GB |
+| tsc, Go wasip1 | 51.2 MB | 14.2 s | 0.65x | 1.60 GB |
+| tsc, TinyGo wasip1 `-opt=z` | 20.9 MB | 20.7 s | 0.45x | 1.94 GB |
+| tsc, TinyGo wasip1 `-opt=2` | 28.1 MB | 20.4 s | 0.45x | 2.15 GB |
+| ts-rust native (parallel) | | 0.74 s | 12.5x | 1.06 GB |
+| ts-rust native `--singleThreaded` | | 1.97 s | 4.7x | 0.74 GB |
+| ts-rust wasm `opt-level=z` | 4.8 MB | 5.68 s | 1.6x | 0.77 GB |
+| ts-rust wasm `opt-level=s` | 6.0 MB | 5.08 s | 1.8x | 0.79 GB |
 
 **examples/basic** (2 files; dominated by parsing and binding the bundled `lib.*.d.ts`)
 
-| variant | wall time | vs tsc native | peak RSS |
+| variant | wall time | speedup vs TS6 | peak RSS |
 |---|---:|---:|---:|
-| tsc native (parallel) | 110 ms | 1.0x | 0.09 GB |
-| tsc native `--singleThreaded` | 115 ms | 1.0x | 0.08 GB |
-| tsc, Go wasip1 | 933 ms | 8.5x | 0.36 GB |
-| tsc, TinyGo wasip1 `-opt=z` | 1,046 ms | 9.5x | 0.42 GB |
-| tsc, TinyGo wasip1 `-opt=2` | 1,122 ms | 10.2x | 0.48 GB |
-| ts-rust native (parallel) | 51 ms | 0.5x | 0.07 GB |
-| ts-rust native `--singleThreaded` | 57 ms | 0.5x | 0.06 GB |
-| ts-rust wasm `opt-level=z` | 320 ms | 2.9x | 0.19 GB |
-| ts-rust wasm `opt-level=s` | 295 ms | 2.7x | 0.20 GB |
+| **TS6** (JS tsc on Node) | 384 ms | 1.0x | 0.24 GB |
+| tsc native (parallel) | 106 ms | 3.6x | 0.09 GB |
+| tsc native `--singleThreaded` | 115 ms | 3.3x | 0.09 GB |
+| tsc, Go wasip1 | 919 ms | 0.42x | 0.36 GB |
+| tsc, TinyGo wasip1 `-opt=z` | 1,031 ms | 0.37x | 0.40 GB |
+| tsc, TinyGo wasip1 `-opt=2` | 1,119 ms | 0.34x | 0.47 GB |
+| ts-rust native (parallel) | 51 ms | 7.5x | 0.07 GB |
+| ts-rust native `--singleThreaded` | 58 ms | 6.6x | 0.06 GB |
+| ts-rust wasm `opt-level=z` | 321 ms | 1.2x | 0.19 GB |
+| ts-rust wasm `opt-level=s` | 293 ms | 1.3x | 0.19 GB |
 
-All wasm runs and the `--singleThreaded` rows use `--singleThreaded`.
+All wasm runs and the `--singleThreaded` rows use `--singleThreaded`; TS6 has no such option and is single-threaded.
 
 Takeaways:
 
-- TinyGo is about 1.4x slower than standard Go on wasm and uses ~20% more memory, but the module is 2.5x smaller.
-- `-opt=2` buys nothing over the default `-opt=z` and makes the module larger.
+- The Go port compiled to wasm is slower than TS6 running as JavaScript on the same engine: 0.65x with Go, 0.45x with TinyGo.
+- ts-rust's wasm build is the only wasm build faster than TS6 (1.6-1.8x), at under half its memory.
+- TinyGo is about 1.4x slower than standard Go on wasm and uses ~20% more memory, but the module is 2.5x smaller. `-opt=2` buys nothing over the default `-opt=z`.
 - Without `--singleThreaded`, TinyGo runs out of memory on social-app (goroutine-per-file × fixed stacks), even with 1MB stacks.
-- ts-rust's wasm build is 2.5-3x faster than Go's and 3.5x faster than TinyGo's, at less than half the memory and a quarter of TinyGo's module size.
+- TS6 and the TS7-based checkers differ in some messages: on `examples/basic`, TS6 reports TS2345 where they report TS2739.
 - In the browser playground (Chrome, small sample) a run takes about 0.9-1.0 s with the Go and TinyGo builds and about 0.3 s with ts-rust.
 
 ## Other implementations

@@ -1,0 +1,8 @@
+{
+  "name": "bench-ts6",
+  "private": true,
+  "description": "TypeScript 6 (the JavaScript tsc) as a baseline for bench/run.sh",
+  "dependencies": {
+    "typescript": "6.0.3"
+  }
+}
