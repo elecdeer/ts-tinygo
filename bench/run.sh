@@ -4,7 +4,7 @@
 # SKIP_TIMING=1 only measures peak memory.
 # Prerequisites: scripts/build-go.sh, scripts/build.sh wasip1,
 #   (optional) scripts/build-ts-rust.sh, pnpm --dir bench/ts6 install
-#   (optional) SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" scripts/build.sh wasip1
+#   (optional) the TinyGo variants in README.md (-opt=2, initial memory 2GB, -gc=leaking)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -30,6 +30,8 @@ add "native --singleThreaded" "$out/tsc-native $args --singleThreaded"
 add "Go wasip1 --singleThreaded" "$wasi $out/tsc-go.wasip1.wasm $args --singleThreaded"
 add "TinyGo -opt=z --singleThreaded" "$wasi $out/tsc.wasip1.wasm $args --singleThreaded"
 [ -f "$out/tsc-o2.wasip1.wasm" ] && add "TinyGo -opt=2 --singleThreaded" "$wasi $out/tsc-o2.wasip1.wasm $args --singleThreaded"
+[ -f "$out/tsc-mem2g.wasip1.wasm" ] && add "TinyGo initial memory 2GB --singleThreaded" "$wasi $out/tsc-mem2g.wasip1.wasm $args --singleThreaded"
+[ -f "$out/tsc-leaking.wasip1.wasm" ] && add "TinyGo -gc=leaking --singleThreaded" "$wasi $out/tsc-leaking.wasip1.wasm $args --singleThreaded"
 # pingdotgg/ts-rust (scripts/build-ts-rust.sh). Its wasm build is driven by its own JS glue, not WASI's _start.
 tsrust="node --no-warnings $root/scripts/run-ts-rust.mjs"
 [ -f "$out/ts-rust-native" ] && add "ts-rust native (parallel)" "$out/ts-rust-native $args"

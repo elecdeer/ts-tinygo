@@ -28,7 +28,11 @@ scripts/build.sh            # TinyGo: out/tsc.wasip1.wasm, out/tsc.wasm.wasm
 scripts/build.sh wasip1     # one target only
 scripts/build-go.sh         # standard Go baseline: out/tsc-go.wasip1.wasm, out/tsc-native
 SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" scripts/build.sh wasip1   # speed-optimized variant
+SUFFIX=-mem2g TINYGO_FLAGS="-no-debug -target=$PWD/targets/wasip1-mem2g.json" scripts/build.sh wasip1   # 2GB initial memory
+SUFFIX=-leaking TINYGO_FLAGS="-no-debug -gc=leaking" scripts/build.sh wasip1   # no garbage collection
 ```
+
+Run one `scripts/build.sh` at a time: it applies and reverts the patches in the submodule.
 
 `scripts/build.sh` applies `patches/*.patch` to the submodule for the duration of the build and reverts them afterwards.
 The link/optimize phase of TinyGo is single-threaded, so targets are built in parallel.
@@ -89,42 +93,62 @@ Raw data is in `bench/results/`.
 
 | variant | module | wall time | speedup vs TS6 | peak RSS |
 |---|---:|---:|---:|---:|
-| **TS6** (JS tsc on Node) | | 9.25 s | 1.0x | 1.70 GB |
-| tsc native (parallel) | | 1.26 s | 7.3x | 1.51 GB |
-| tsc native `--singleThreaded` | | 2.63 s | 3.5x | 1.09 GB |
-| tsc, Go wasip1 | 51.2 MB | 14.2 s | 0.65x | 1.60 GB |
-| tsc, TinyGo wasip1 `-opt=z` | 20.9 MB | 20.7 s | 0.45x | 1.94 GB |
-| tsc, TinyGo wasip1 `-opt=2` | 28.1 MB | 20.4 s | 0.45x | 2.15 GB |
-| ts-rust native (parallel) | | 0.74 s | 12.5x | 1.06 GB |
-| ts-rust native `--singleThreaded` | | 1.97 s | 4.7x | 0.74 GB |
-| ts-rust wasm `opt-level=z` | 4.8 MB | 5.68 s | 1.6x | 0.77 GB |
-| ts-rust wasm `opt-level=s` | 6.0 MB | 5.08 s | 1.8x | 0.79 GB |
+| **TS6** (JS tsc on Node) | | 9.53 s | 1.0x | 1.70 GB |
+| tsc native (parallel) | | 1.20 s | 7.9x | 1.50 GB |
+| tsc native `--singleThreaded` | | 2.67 s | 3.6x | 1.05 GB |
+| tsc, Go wasip1 | 51.2 MB | 15.3 s | 0.62x | 1.60 GB |
+| tsc, TinyGo wasip1 `-opt=z` (default) | 20.9 MB | 21.5 s | 0.44x | 1.93 GB |
+| tsc, TinyGo wasip1 `-opt=2` | 28.1 MB | 20.4 s | 0.47x | 2.15 GB |
+| tsc, TinyGo wasip1, 2GB initial memory | 20.9 MB | 15.9 s | 0.60x | 2.29 GB |
+| tsc, TinyGo wasip1 `-gc=leaking` | 18.4 MB | 9.67 s | 0.99x | 2.73 GB |
+| ts-rust native (parallel) | | 0.72 s | 13.2x | 1.05 GB |
+| ts-rust native `--singleThreaded` | | 1.85 s | 5.2x | 0.74 GB |
+| ts-rust wasm `opt-level=z` | 4.8 MB | 5.33 s | 1.8x | 0.77 GB |
+| ts-rust wasm `opt-level=s` | 6.0 MB | 4.71 s | 2.0x | 0.79 GB |
 
 **examples/basic** (2 files; dominated by parsing and binding the bundled `lib.*.d.ts`)
 
 | variant | wall time | speedup vs TS6 | peak RSS |
 |---|---:|---:|---:|
-| **TS6** (JS tsc on Node) | 384 ms | 1.0x | 0.24 GB |
-| tsc native (parallel) | 106 ms | 3.6x | 0.09 GB |
-| tsc native `--singleThreaded` | 115 ms | 3.3x | 0.09 GB |
-| tsc, Go wasip1 | 919 ms | 0.42x | 0.36 GB |
-| tsc, TinyGo wasip1 `-opt=z` | 1,031 ms | 0.37x | 0.40 GB |
-| tsc, TinyGo wasip1 `-opt=2` | 1,119 ms | 0.34x | 0.47 GB |
-| ts-rust native (parallel) | 51 ms | 7.5x | 0.07 GB |
-| ts-rust native `--singleThreaded` | 58 ms | 6.6x | 0.06 GB |
-| ts-rust wasm `opt-level=z` | 321 ms | 1.2x | 0.19 GB |
-| ts-rust wasm `opt-level=s` | 293 ms | 1.3x | 0.19 GB |
+| **TS6** (JS tsc on Node) | 397 ms | 1.0x | 0.24 GB |
+| tsc native (parallel) | 108 ms | 3.7x | 0.09 GB |
+| tsc native `--singleThreaded` | 116 ms | 3.4x | 0.09 GB |
+| tsc, Go wasip1 | 923 ms | 0.43x | 0.36 GB |
+| tsc, TinyGo wasip1 `-opt=z` (default) | 1,038 ms | 0.38x | 0.42 GB |
+| tsc, TinyGo wasip1 `-opt=2` | 1,116 ms | 0.36x | 0.48 GB |
+| tsc, TinyGo wasip1, 2GB initial memory | 796 ms | 0.50x | 0.46 GB |
+| tsc, TinyGo wasip1 `-gc=leaking` | 609 ms | 0.65x | 0.36 GB |
+| ts-rust native (parallel) | 51 ms | 7.8x | 0.07 GB |
+| ts-rust native `--singleThreaded` | 59 ms | 6.8x | 0.06 GB |
+| ts-rust wasm `opt-level=z` | 320 ms | 1.2x | 0.19 GB |
+| ts-rust wasm `opt-level=s` | 289 ms | 1.4x | 0.19 GB |
 
 All wasm runs and the `--singleThreaded` rows use `--singleThreaded`; TS6 has no such option and is single-threaded.
 
 Takeaways:
 
-- The Go port compiled to wasm is slower than TS6 running as JavaScript on the same engine: 0.65x with Go, 0.45x with TinyGo.
-- ts-rust's wasm build is the only wasm build faster than TS6 (1.6-1.8x), at under half its memory.
-- TinyGo is about 1.4x slower than standard Go on wasm and uses ~20% more memory, but the module is 2.5x smaller. `-opt=2` buys nothing over the default `-opt=z`.
+- The Go port compiled to wasm is slower than TS6 running as JavaScript on the same engine: 0.62x with Go, 0.44x with TinyGo by default.
+- ts-rust's wasm build is the fastest wasm build (1.8-2.0x TS6), at under half TS6's memory.
+- TinyGo spends over half its time collecting and allocating (see below). A 2GB initial memory brings it level with standard Go; without collection it matches TS6.
+- `-opt=2` buys nothing over the default `-opt=z` and makes the module larger.
 - Without `--singleThreaded`, TinyGo runs out of memory on social-app (goroutine-per-file × fixed stacks), even with 1MB stacks.
 - TS6 and the TS7-based checkers differ in some messages: on `examples/basic`, TS6 reports TS2345 where they report TS2739.
 - In the browser playground (Chrome, small sample) a run takes about 0.9-1.0 s with the Go and TinyGo builds and about 0.3 s with ts-rust.
+
+### Why TinyGo is slow
+
+A CPU profile of social-app (`node --cpu-prof`) puts about a third of the time in TinyGo's GC, a fifth in `(runtime.gcBlock).findHead` alone, and 8% in maps; asyncify is 0.2%.
+`-gc=leaking` (never free) runs 2.2x faster.
+
+- TinyGo 0.43's block GC marks an object's head on its *last* block, so following a pointer to the start of an object walks the block states to its end: the cost of each pointer grows with the size of what it points to.
+  typescript-go allocates nodes and types in arenas, so most pointers point into large chunks.
+- The heap grows only when a collection leaves less than a third free, and every collection walks the whole live heap.
+  `runtime/debug.SetGCPercent` does nothing in TinyGo.
+- Without changing TinyGo, a larger initial memory skips the collections of the early, small heaps (`targets/wasip1-mem2g.json`).
+  2GB is the sweet spot: the heap grows by doubling, so 2GB can still grow once to wasm32's 4GB; 3GB cannot and runs slower (17.1 s).
+  It costs memory up front, which a browser may refuse.
+- `-gc=leaking` only works while everything a run ever allocates fits in 4GB (2.7GB for social-app). A larger project such as VS Code (4.2GB with TS7) runs out.
+- Patching TinyGo's runtime (not kept here) gives similar gains: skipping all-tail state bytes 8 at a time in `findHead` cut social-app by 22%, growing at half free instead of a third by 9%, and both together by 27%.
 
 ## Other implementations
 

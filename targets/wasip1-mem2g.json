@@ -1,0 +1,4 @@
+{
+  "inherits": ["wasip1"],
+  "ldflags": ["--initial-memory=2147483648", "--max-memory=4294967296"]
+}
