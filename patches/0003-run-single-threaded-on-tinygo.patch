@@ -1,0 +1,202 @@
+diff --git a/tsc/internal/compiler/program.go b/tsc/internal/compiler/program.go
+index 2c7aa080..a26c4938 100644
+--- a/tsc/internal/compiler/program.go
++++ b/tsc/internal/compiler/program.go
+@@ -589,7 +589,7 @@ func (p *Program) extractUnresolvedImportsFromSourceFile(file *ast.SourceFile) [
+ }
+ 
+ func (p *Program) SingleThreaded() bool {
+-	return p.opts.SingleThreaded.DefaultIfUnknown(p.Options().SingleThreaded).IsTrue()
++	return core.SingleThreadedRuntime || p.opts.SingleThreaded.DefaultIfUnknown(p.Options().SingleThreaded).IsTrue()
+ }
+ 
+ func (p *Program) BindSourceFiles() {
+diff --git a/tsc/internal/core/singlethreaded.go b/tsc/internal/core/singlethreaded.go
+new file mode 100644
+index 00000000..8d0b1e8d
+--- /dev/null
++++ b/tsc/internal/core/singlethreaded.go
+@@ -0,0 +1,16 @@
++package core
++
++import "sync"
++
++// SingleThreadedRuntime is set by builds whose runtime cannot run goroutines in parallel.
++var SingleThreadedRuntime bool
++
++// GoOrRun starts fn on wg, or runs it before returning under SingleThreadedRuntime.
++// Only for tasks that do not wait on each other.
++func GoOrRun(wg *sync.WaitGroup, fn func()) {
++	if SingleThreadedRuntime {
++		fn()
++		return
++	}
++	wg.Go(fn)
++}
+diff --git a/tsc/internal/core/singlethreaded_test.go b/tsc/internal/core/singlethreaded_test.go
+new file mode 100644
+index 00000000..976d35c4
+--- /dev/null
++++ b/tsc/internal/core/singlethreaded_test.go
+@@ -0,0 +1,33 @@
++package core
++
++import (
++	"sync"
++	"sync/atomic"
++	"testing"
++
++	"gotest.tools/v3/assert"
++)
++
++func TestGoOrRun(t *testing.T) {
++	t.Run("runs every function by the time Wait returns", func(t *testing.T) {
++		var wg sync.WaitGroup
++		var ran atomic.Int32
++		for range 10 {
++			GoOrRun(&wg, func() { ran.Add(1) })
++		}
++		wg.Wait()
++		assert.Equal(t, ran.Load(), int32(10))
++	})
++
++	t.Run("runs the function before returning under SingleThreadedRuntime", func(t *testing.T) {
++		saved := SingleThreadedRuntime
++		SingleThreadedRuntime = true
++		t.Cleanup(func() { SingleThreadedRuntime = saved })
++
++		var wg sync.WaitGroup
++		ran := false
++		GoOrRun(&wg, func() { ran = true })
++		assert.Assert(t, ran)
++		wg.Wait()
++	})
++}
+diff --git a/tsc/internal/core/singlethreaded_tinygo.go b/tsc/internal/core/singlethreaded_tinygo.go
+new file mode 100644
+index 00000000..d495320f
+--- /dev/null
++++ b/tsc/internal/core/singlethreaded_tinygo.go
+@@ -0,0 +1,11 @@
++//go:build tinygo
++
++package core
++
++// TinyGo runs goroutines on one thread and gives each a fixed-size stack, so a
++// goroutine per file or package costs time and, on large projects, all of
++// wasm32's memory. This also covers the language server, which has no
++// --singleThreaded flag.
++func init() {
++	SingleThreadedRuntime = true
++}
+diff --git a/tsc/internal/core/workgroup.go b/tsc/internal/core/workgroup.go
+index 73618a1a..ff250b2a 100644
+--- a/tsc/internal/core/workgroup.go
++++ b/tsc/internal/core/workgroup.go
+@@ -18,7 +18,7 @@ type WorkGroup interface {
+ }
+ 
+ func NewWorkGroup(singleThreaded bool) WorkGroup {
+-	if singleThreaded {
++	if singleThreaded || SingleThreadedRuntime {
+ 		return &singleThreadedWorkGroup{}
+ 	}
+ 	return &parallelWorkGroup{}
+diff --git a/tsc/internal/ls/autoimport/registry.go b/tsc/internal/ls/autoimport/registry.go
+index 4b8a7104..263e49e1 100644
+--- a/tsc/internal/ls/autoimport/registry.go
++++ b/tsc/internal/ls/autoimport/registry.go
+@@ -897,7 +897,7 @@ func (b *registryBuilder) updateIndexes(ctx context.Context, change RegistryChan
+ 	// Resolve package.json and realpath for each package in each bucket.
+ 	discoveryStart := time.Now()
+ 	for _, task := range nodeModulesTasks {
+-		wg.Go(func() {
++		core.GoOrRun(&wg, func() {
+ 			if task.isUpdate {
+ 				task.packageNames = task.dirtyPackages
+ 			} else {
+@@ -936,7 +936,7 @@ func (b *registryBuilder) updateIndexes(ctx context.Context, change RegistryChan
+ 					if enableDirSearch && targetRecursivePackages != nil {
+ 						targetRecursivePackages.Add(pkg.packageName)
+ 					}
+-					wg.Go(func() {
++					core.GoOrRun(&wg, func() {
+ 						if ctx.Err() != nil {
+ 							return
+ 						}
+@@ -958,7 +958,7 @@ func (b *registryBuilder) updateIndexes(ctx context.Context, change RegistryChan
+ 					if targetRecursivePackages != nil {
+ 						targetRecursivePackages.Add(pkg.packageName)
+ 					}
+-					wg.Go(func() {
++					core.GoOrRun(&wg, func() {
+ 						if ctx.Err() != nil {
+ 							return
+ 						}
+@@ -988,7 +988,7 @@ func (b *registryBuilder) updateIndexes(ctx context.Context, change RegistryChan
+ 		if targetRecursivePackages != nil {
+ 			targetRecursivePackages.Add(pkg.packageName)
+ 		}
+-		wg.Go(func() {
++		core.GoOrRun(&wg, func() {
+ 			if ctx.Err() != nil {
+ 				return
+ 			}
+@@ -1016,7 +1016,7 @@ func (b *registryBuilder) updateIndexes(ctx context.Context, change RegistryChan
+ 			resolutionPath: task.entry.Key(),
+ 		}
+ 		allResults = append(allResults, br)
+-		wg.Go(func() {
++		core.GoOrRun(&wg, func() {
+ 			if task.isUpdate {
+ 				b.updateNodeModulesBucket(
+ 					ctx, br, task.existingBucket, task.dirtyPackages, task.discovered, extractionCache,
+@@ -1050,7 +1050,7 @@ func (b *registryBuilder) updateIndexes(ctx context.Context, change RegistryChan
+ 				resolutionPath: b.base.caseSensitivity.PathKey(program.BaseDirectory().AsPath()),
+ 			}
+ 			allResults = append(allResults, br)
+-			wg.Go(func() {
++			core.GoOrRun(&wg, func() {
+ 				b.buildProjectBucket(
+ 					ctx, br, projectID, resolvedPackageNames,
+ 					logger.Fork("Building project bucket "+projectID.String()),
+@@ -1281,7 +1281,7 @@ func (b *registryBuilder) buildProjectBucket(
+ 			(file.FileName().ContainsLowercaseDirectorySequence("/node_modules/") || hasSymlinkToNodeModules(file.PathKey(), projectRootPath, symlinkCache)) {
+ 			continue
+ 		}
+-		wg.Go(func() {
++		core.GoOrRun(&wg, func() {
+ 			if ctx.Err() == nil {
+ 				checker, done := getChecker()
+ 				defer done()
+@@ -1510,7 +1510,7 @@ func (b *registryBuilder) extractPackage(
+ 			symlinks[realpathPath] = pathAndFileName{path: symlinkPath, fileName: fileName}
+ 			result.isSymlinked = true
+ 		}
+-		wg.Go(func() {
++		core.GoOrRun(&wg, func() {
+ 			file := b.host.GetSourceFile(realpathFileName, realpathPath)
+ 			if file != nil {
+ 				binder.BindSourceFile(file)
+diff --git a/tsc/internal/project/projectcollectionbuilder.go b/tsc/internal/project/projectcollectionbuilder.go
+index 99872b4c..313d0017 100644
+--- a/tsc/internal/project/projectcollectionbuilder.go
++++ b/tsc/internal/project/projectcollectionbuilder.go
+@@ -343,7 +343,7 @@ func (b *ProjectCollectionBuilder) HandleAPIRequest(apiRequest *APISnapshotReque
+ 	}
+ 	var wg sync.WaitGroup
+ 	for i, entry := range createdEntries {
+-		wg.Go(func() {
++		core.GoOrRun(&wg, func() {
+ 			if entry.Value().dirty {
+ 				b.updateProgram(entry, logger)
+ 			}
+@@ -351,7 +351,7 @@ func (b *ProjectCollectionBuilder) HandleAPIRequest(apiRequest *APISnapshotReque
+ 		})
+ 	}
+ 	for _, entry := range reconfiguredEntries {
+-		wg.Go(func() {
++		core.GoOrRun(&wg, func() {
+ 			if entry.Value().dirty {
+ 				b.updateProgram(entry, logger)
+ 			}

@@ -55,6 +55,14 @@ The link/optimize phase of TinyGo is single-threaded, so targets are built in pa
   wasi-libc emulates the cwd starting at `/` while standard Go's wasip1 port reads `$PWD`, so the TinyGo build `chdir`s to `$PWD` on startup.
 - **Stack size**: TinyGo goroutine stacks are fixed (64KB by default on wasm); the checker overflows them and corrupts the heap
   (it shows up as a nil-pointer panic in `core.LinkStore.Get`). The build uses `-stack-size=16MB`.
+- **One thread** ([0003](patches/0003-run-single-threaded-on-tinygo.patch)):
+  tsc starts a goroutine per file or package, and on TinyGo each one reserves the full fixed-size stack:
+  large projects run out of wasm32 memory even with 1MB stacks, and small ones are ~2.7x slower than on one goroutine.
+  TinyGo builds always run single-threaded, as `--singleThreaded` does, including the parts that flag does not reach
+  (the language server's auto-import registry and project builder).
+- **Language server input** ([0004](patches/0004-poll-lsp-stdin-on-tinygo.patch)):
+  a blocking `fd_read` on stdin stops every goroutine until the client sends the next message, so background work stalls.
+  On TinyGo the server makes stdin non-blocking and polls it. This keeps diagnostics flowing, but completion still never answers (see below).
 
 ## Run
 
@@ -63,8 +71,7 @@ cd examples/basic
 node ../../scripts/run-wasi.mjs ../../out/tsc.wasip1.wasm -p .
 ```
 
-Use `--singleThreaded` with TinyGo builds. tsc otherwise starts a goroutine per file, and each one reserves the full fixed-size stack:
-large projects run out of wasm32 memory even with 1MB stacks, and small ones are ~2.7x slower than single-threaded.
+TinyGo builds run single-threaded on their own ([0003](patches/0003-run-single-threaded-on-tinygo.patch)).
 
 ## Playground
 
@@ -149,6 +156,37 @@ A CPU profile of social-app (`node --cpu-prof`) puts about a third of the time i
   It costs memory up front, which a browser may refuse.
 - `-gc=leaking` only works while everything a run ever allocates fits in 4GB (2.7GB for social-app). A larger project such as VS Code (4.2GB with TS7) runs out.
 - Patching TinyGo's runtime (not kept here) gives similar gains: skipping all-tail state bytes 8 at a time in `findHead` cut social-app by 22%, growing at half free instead of a third by 9%, and both together by 27%.
+
+## Language server benchmark
+
+How an editor experiences each implementation: start the server, open a file, then time diagnostics, an edit, completion and hover.
+`bench/lsp/run.mjs` is the client; it speaks LSP (pull or push diagnostics) and tsserver's own protocol.
+
+```sh
+bench/lsp/all.sh bench/repos/social-app bench/repos/social-app/src/view/com/composer/Composer.tsx 3
+node bench/lsp/summarize.mjs bench/results/lsp-social-app.jsonl
+```
+
+social-app, opening `src/view/com/composer/Composer.tsx` (2,736 lines, 90 imports). Each edit appends a line that alternates between a type error and valid code;
+completion is asked after an appended `[].`. Medians of 3 runs (edits: of all 15).
+
+| server | initialize | first diagnostics | diagnostics after an edit | completion | hover |
+|---|---:|---:|---:|---:|---:|
+| TS6 (tsserver, `geterr`) | 47 ms | 701 ms | 644 ms | 21 ms | 2 ms |
+| TS6 (typescript-language-server) | 74 ms | 3.76 s | 442 ms | 913 ms | 17 ms |
+| tsc native | 7 ms | 486 ms | 286 ms | 283 ms | 1 ms |
+| ts-rust native | 4 ms | 731 ms | 420 ms | 933 ms | 262 ms |
+| tsc, TinyGo wasm | 192 ms | 7.36 s | 2.06 s | no answer | no answer |
+| tsc, TinyGo wasm, 2GB initial memory | 81 ms | 4.54 s | 3.73 s | no answer | no answer |
+| tsc, Go wasm | 104 ms | no answer | – | – | – |
+
+- The wasm builds run under Node.js WASI (`scripts/run-wasi.mjs`). ts-rust's wasm build has no language server.
+- tsc and ts-rust include suggestion diagnostics (16 "deprecated" hints here) in their pull results; tsserver reports those as a separate `suggestionDiag` event, which `geterr` waits for but this count leaves out.
+- typescript-language-server pushes diagnostics after its own delay, so its edit times are mostly that delay; the direct tsserver row is TS6's checking time.
+- On TinyGo, edits settle at 1.8-2.2 s; in every run the first takes about 4.3 s and one of the next two 8-9 s (the 2nd on the default build, the 3rd with 2GB). The 2GB build's first diagnostics are faster, its median edit is not.
+- TinyGo never answers completion: with nothing else to do, the server idles at 0% CPU with the request pending.
+  It answered (in 9.7 s, then hover in 12 ms) only when the client sent a notification every 50 ms, so the request waits on work that only advances when a message arrives. The cause is not pinned down.
+- Go's wasip1 build answers `initialize` and then hangs; Node.js's WASI does not seem to wake Go's poller for stdin (not verified).
 
 ## Other implementations
 
