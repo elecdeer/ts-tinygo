@@ -4,3 +4,6 @@
 [submodule "ts-rust"]
 	path = ts-rust
 	url = https://github.com/pingdotgg/ts-rust.git
+[submodule "tsrs"]
+	path = tsrs
+	url = https://github.com/oxc-project/tsrs.git

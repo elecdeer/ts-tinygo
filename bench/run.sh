@@ -3,7 +3,7 @@
 # usage: bench/run.sh <project-dir> <tsconfig> [runs]
 # SKIP_TIMING=1 only measures peak memory.
 # Prerequisites: scripts/build-go.sh, scripts/build.sh wasip1,
-#   (optional) scripts/build-ts-rust.sh, pnpm --dir bench/ts6 install
+#   (optional) scripts/build-ts-rust.sh, scripts/build-tsrs.sh, pnpm --dir bench/ts6 install
 #   (optional) the TinyGo variants in README.md (-opt=2, initial memory 2GB, -gc=leaking)
 set -euo pipefail
 
@@ -38,6 +38,12 @@ tsrust="node --no-warnings $root/scripts/run-ts-rust.mjs"
 [ -f "$out/ts-rust-native" ] && add "ts-rust native --singleThreaded" "$out/ts-rust-native $args --singleThreaded"
 [ -f "$out/ts-rust.wasm" ] && add "ts-rust wasm opt-level=z" "$tsrust $out/ts-rust.wasm $args --singleThreaded"
 [ -f "$out/ts-rust-s.wasm" ] && add "ts-rust wasm opt-level=s" "$tsrust $out/ts-rust-s.wasm $args --singleThreaded"
+# oxc-project/tsrs (scripts/build-tsrs.sh). Its wasm build is driven by its own JS glue too.
+tsrs="node --no-warnings $root/scripts/run-tsrs.mjs"
+[ -f "$out/tsrs-native" ] && add "tsrs native (parallel)" "$out/tsrs-native $args"
+[ -f "$out/tsrs-native" ] && add "tsrs native --singleThreaded" "$out/tsrs-native $args --singleThreaded"
+[ -f "$out/tsrs-z.wasm" ] && add "tsrs wasm opt-level=z" "$tsrs $out/tsrs-z.wasm $args --singleThreaded"
+[ -f "$out/tsrs.wasm" ] && add "tsrs wasm opt-level=s" "$tsrs $out/tsrs.wasm $args --singleThreaded"
 
 hf=()
 for i in "${!cmds[@]}"; do hf+=(-n "${names[$i]}" "${cmds[$i]}"); done
