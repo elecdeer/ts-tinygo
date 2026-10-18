@@ -19,6 +19,7 @@ servers=(
   "TS6 (typescript-language-server)||$root/bench/ts6/node_modules/.bin/typescript-language-server --stdio"
   "tsc native||$out/tsc-native --lsp --stdio"
   "ts-rust native||$out/ts-rust-native --lsp --stdio"
+  "tsrs native||$out/tsrs-native --lsp --stdio"
   # Completion never answers on TinyGo (see README), so do not wait the default 3 minutes for it.
   "tsc TinyGo wasm|--timeout=60000|$wasi $out/tsc.wasip1.wasm --lsp --stdio"
   "tsc TinyGo wasm, 2GB initial memory|--timeout=60000|$wasi $out/tsc-mem2g.wasip1.wasm --lsp --stdio"
