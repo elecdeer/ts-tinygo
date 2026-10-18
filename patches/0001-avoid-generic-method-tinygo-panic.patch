@@ -1,0 +1,30 @@
+diff --git a/tsc/internal/packagejson/exportsorimports.go b/tsc/internal/packagejson/exportsorimports.go
+index 7add2e9f..85125e0b 100644
+--- a/tsc/internal/packagejson/exportsorimports.go
++++ b/tsc/internal/packagejson/exportsorimports.go
+@@ -23,7 +23,7 @@ type ExportsOrImports struct {
+ var _ json.UnmarshalerFrom = (*ExportsOrImports)(nil)
+ 
+ func (e *ExportsOrImports) UnmarshalJSONFrom(dec *json.Decoder) error {
+-	return e.JSONValue.unmarshalJSONValueFrom[ExportsOrImports](dec)
++	return unmarshalJSONValueFrom[ExportsOrImports](&e.JSONValue, dec)
+ }
+ 
+ func (e ExportsOrImports) AsObject() *collections.OrderedMap[string, ExportsOrImports] {
+diff --git a/tsc/internal/packagejson/jsonvalue.go b/tsc/internal/packagejson/jsonvalue.go
+index ef88e9b0..700e2bc5 100644
+--- a/tsc/internal/packagejson/jsonvalue.go
++++ b/tsc/internal/packagejson/jsonvalue.go
+@@ -86,10 +86,10 @@ func (v JSONValue) AsString() string {
+ var _ json.UnmarshalerFrom = (*JSONValue)(nil)
+ 
+ func (v *JSONValue) UnmarshalJSONFrom(dec *json.Decoder) error {
+-	return v.unmarshalJSONValueFrom[JSONValue](dec)
++	return unmarshalJSONValueFrom[JSONValue](v, dec)
+ }
+ 
+-func (v *JSONValue) unmarshalJSONValueFrom[T any](dec *json.Decoder) error {
++func unmarshalJSONValueFrom[T any](v *JSONValue, dec *json.Decoder) error {
+ 	switch dec.PeekKind() {
+ 	case 'n': // json.Null.Kind()
+ 		if _, err := dec.ReadToken(); err != nil {

@@ -1,0 +1,6 @@
+[tools]
+"aqua:WebAssembly/binaryen" = "133"
+"github:sharkdp/hyperfine" = "2.0.0"
+go = "1.27.2"
+rust = "1.99.0"
+tinygo = "0.43.0"

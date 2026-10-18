@@ -1,0 +1,9 @@
+{
+  "name": "bench-ts6",
+  "private": true,
+  "description": "TypeScript 6 (the JavaScript tsc and tsserver) as a baseline for bench/run.sh and bench/lsp",
+  "dependencies": {
+    "typescript": "6.0.3",
+    "typescript-language-server": "6.0.2"
+  }
+}

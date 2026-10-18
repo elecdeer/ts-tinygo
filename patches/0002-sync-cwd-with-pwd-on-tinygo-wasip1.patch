@@ -1,0 +1,21 @@
+diff --git a/tsc/cmd/tsc/cwd_tinygo_wasip1.go b/tsc/cmd/tsc/cwd_tinygo_wasip1.go
+new file mode 100644
+index 00000000..9ba87e6b
+--- /dev/null
++++ b/tsc/cmd/tsc/cwd_tinygo_wasip1.go
+@@ -0,0 +1,15 @@
++//go:build tinygo && wasip1
++
++package main
++
++import "os"
++
++// init aligns the working directory with $PWD.
++// wasi-libc emulates the cwd starting at "/", unlike the standard Go
++// wasip1 port which reads $PWD, so relative paths would otherwise
++// resolve against the root.
++func init() {
++	if pwd := os.Getenv("PWD"); pwd != "" {
++		_ = os.Chdir(pwd)
++	}
++}
