@@ -3,10 +3,10 @@
 # tsrs and ts-rust against TypeScript 6 (the JavaScript tsc on Node).
 # usage: bench/run.sh <project-dir> <tsconfig> [runs]
 # SKIP_TIMING=1 only measures peak memory.
-# VARIANTS=1 adds the other builds from README.md (TinyGo -opt=2, initial memory 2GB, -gc=leaking;
-#   tsrs opt-level=z, ts-rust opt-level=s) when they are built.
+# VARIANTS=1 adds the Rust ports' other optimization levels (tsrs opt-level=z, ts-rust opt-level=s).
 # Prerequisites: pnpm --dir bench/ts6 install, scripts/build-go.sh wasip1, scripts/build.sh wasip1
-#   (and the same with TS_VERSION=7.0), scripts/build-tsrs.sh wasm, scripts/build-ts-rust.sh wasm
+#   and the TinyGo variants in README.md (-opt=2, initial memory 2GB, -gc=leaking), each also with
+#   TS_VERSION=7.0, scripts/build-tsrs.sh wasm, scripts/build-ts-rust.sh wasm
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,19 +26,21 @@ names=()
 add() { names+=("$1"); cmds+=("$2"); }
 # TypeScript 6, the JavaScript tsc. It has no --singleThreaded; it is single-threaded.
 add "TS6.0" "node $root/bench/ts6/node_modules/typescript/bin/tsc $args"
-add "TS7.0 (Go)" "$wasi $out/tsc-go-7.0.wasip1.wasm $args --singleThreaded"
-add "TS7.0 (TinyGo)" "$wasi $out/tsc-7.0.wasip1.wasm $args --singleThreaded"
-add "TS7.1 (Go)" "$wasi $out/tsc-go.wasip1.wasm $args --singleThreaded"
-add "TS7.1 (TinyGo)" "$wasi $out/tsc.wasip1.wasm $args --singleThreaded"
+for v in 7.0 7.1; do
+  s=""
+  [ "$v" = 7.0 ] && s="-7.0"
+  add "TS$v (Go)" "$wasi $out/tsc-go$s.wasip1.wasm $args --singleThreaded"
+  add "TS$v (TinyGo)" "$wasi $out/tsc$s.wasip1.wasm $args --singleThreaded"
+  add "TS$v (TinyGo -opt=2)" "$wasi $out/tsc$s-o2.wasip1.wasm $args --singleThreaded"
+  add "TS$v (TinyGo, initial memory 2GB)" "$wasi $out/tsc$s-mem2g.wasip1.wasm $args --singleThreaded"
+  add "TS$v (TinyGo -gc=leaking)" "$wasi $out/tsc$s-leaking.wasip1.wasm $args --singleThreaded"
+done
 # The Rust ports' wasm builds are driven by their own JS glue, not WASI's _start.
 tsrs="node --no-warnings $root/scripts/run-tsrs.mjs"
 tsrust="node --no-warnings $root/scripts/run-ts-rust.mjs"
 add "tsrs" "$tsrs $out/tsrs.wasm $args --singleThreaded"
 add "ts-rust" "$tsrust $out/ts-rust.wasm $args --singleThreaded"
 if [ -n "${VARIANTS:-}" ]; then
-  [ -f "$out/tsc-o2.wasip1.wasm" ] && add "TS7.1 (TinyGo -opt=2)" "$wasi $out/tsc-o2.wasip1.wasm $args --singleThreaded"
-  [ -f "$out/tsc-mem2g.wasip1.wasm" ] && add "TS7.1 (TinyGo, initial memory 2GB)" "$wasi $out/tsc-mem2g.wasip1.wasm $args --singleThreaded"
-  [ -f "$out/tsc-leaking.wasip1.wasm" ] && add "TS7.1 (TinyGo -gc=leaking)" "$wasi $out/tsc-leaking.wasip1.wasm $args --singleThreaded"
   [ -f "$out/tsrs-z.wasm" ] && add "tsrs opt-level=z" "$tsrs $out/tsrs-z.wasm $args --singleThreaded"
   [ -f "$out/ts-rust-s.wasm" ] && add "ts-rust opt-level=s" "$tsrust $out/ts-rust-s.wasm $args --singleThreaded"
 fi

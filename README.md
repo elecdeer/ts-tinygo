@@ -104,11 +104,12 @@ pnpm run dev
 pnpm --dir bench/ts6 install                    # TypeScript 6 のベースライン
 scripts/build-go.sh wasip1 && TS_VERSION=7.0 scripts/build-go.sh wasip1
 scripts/build.sh wasip1 && TS_VERSION=7.0 scripts/build.sh wasip1
-scripts/build-tsrs.sh wasm && scripts/build-ts-rust.sh wasm
+# TinyGo のバリアント（ビルド節の SUFFIX 付きのコマンド）も 7.1 と TS_VERSION=7.0 の両方でビルドする
+scripts/build-tsrs.sh wasm wasm-z && scripts/build-ts-rust.sh wasm wasm-s
 bench/sizes.sh
-bench/run.sh examples/basic tsconfig.json 10
-bench/run.sh bench/repos/playwright tsconfig.json 3
-bench/run.sh bench/repos/social-app tsconfig.check.web.json 3
+VARIANTS=1 bench/run.sh examples/basic tsconfig.json 10
+VARIANTS=1 bench/run.sh bench/repos/playwright tsconfig.json 3
+VARIANTS=1 bench/run.sh bench/repos/social-app tsconfig.check.web.json 3
 ```
 
 対象のリポジトリは `bench/repos/` に置く（git の管理外）。
@@ -125,23 +126,31 @@ Playwright は `utils/generate_injected.js` が生成する `packages/playwright
 計測環境は Apple Silicon Mac（14 コア、48GB）、Node.js 26、TypeScript 6.0.3、TinyGo 0.43、Go 1.27.2、Rust 1.99。
 実行時間には Node.js の起動と、wasm の場合は V8 によるモジュールのコンパイルを含む。速度比は TypeScript 6（JavaScript 版 tsc）に対する値。
 wasm の実行はすべて `--singleThreaded` を指定している。TS6 にはこのオプションがなく、もともとシングルスレッドで動く。
-tsrs と ts-rust はそれぞれ上流のデフォルトのビルド（tsrs は `opt-level=s`、ts-rust は `opt-level=z`）。
-生データは `bench/results/` にある。
+`VARIANTS=1` は Rust 移植版のデフォルト以外の最適化レベル（tsrs の `opt-level=z`、ts-rust の `opt-level=s`）を加える。
+生データは `bench/results/` にある。計測ごとに 1 割程度のばらつきがあるので、表はすべて同じ 1 回の計測から取っている。
 
 ### サイズ
 
 | バリアント | サイズ | gzip -9 |
 |---|---:|---:|
-| TS6.0 | 10.0 MB | 1.6 MB |
+| **TS6.0** | 10.0 MB | 1.6 MB |
 | TS7.0 (Go) | 49.5 MB | 10.8 MB |
-| TS7.0 (TinyGo) | 20.0 MB | 6.1 MB |
+| TS7.0 (TinyGo) `-opt=z`（デフォルト） | 20.0 MB | 6.1 MB |
+| TS7.0 (TinyGo) `-opt=2` | 26.8 MB | 7.9 MB |
+| TS7.0 (TinyGo) 初期メモリ 2GB | 20.0 MB | 6.1 MB |
+| TS7.0 (TinyGo) `-gc=leaking` | 17.6 MB | 5.3 MB |
 | TS7.1 (Go) | 50.1 MB | 11.4 MB |
-| TS7.1 (TinyGo) | 21.8 MB | 6.7 MB |
-| tsrs | 9.9 MB | 2.9 MB |
-| ts-rust | 5.1 MB | 2.2 MB |
+| TS7.1 (TinyGo) `-opt=z`（デフォルト） | 21.8 MB | 6.7 MB |
+| TS7.1 (TinyGo) `-opt=2` | 29.0 MB | 8.6 MB |
+| TS7.1 (TinyGo) 初期メモリ 2GB | 21.8 MB | 6.7 MB |
+| TS7.1 (TinyGo) `-gc=leaking` | 19.2 MB | 5.8 MB |
+| tsrs `opt-level=s`（デフォルト） | 9.9 MB | 2.9 MB |
+| ts-rust `opt-level=z`（デフォルト） | 5.1 MB | 2.2 MB |
+| tsrs `opt-level=z` | 8.8 MB | 2.5 MB |
+| ts-rust `opt-level=s` | 6.3 MB | 2.6 MB |
 
 wasm のモジュールは `lib.*.d.ts` を埋め込んでいるので、TS6 は `tsc.js`・`_tsc.js`（6.2 MB、gzip 1.1 MB）と `lib.*.d.ts`（3.8 MB、gzip 0.6 MB）の合計にしている。
-tsrs と ts-rust の JS グルーコード（数 KB）は含めていない。
+tsrs と ts-rust の JS グルーコード（数 KB）は含めていない。初期メモリ 2GB のビルドはメモリセクションの初期サイズが違うだけで、コードはデフォルトと同じ。
 
 ### 実行時間とメモリ
 
@@ -149,84 +158,95 @@ tsrs と ts-rust の JS グルーコード（数 KB）は含めていない。
 
 | バリアント | 実行時間 | TS6 比 | ピーク RSS |
 |---|---:|---:|---:|
-| **TS6.0** | 9.94 s | 1.0x | 1.70 GB |
-| TS7.0 (Go) | 19.1 s | 0.52x | 1.78 GB |
-| TS7.0 (TinyGo) | 34.3 s | 0.29x | 3.43 GB |
-| TS7.1 (Go) | 15.6 s | 0.64x | 1.32 GB |
-| TS7.1 (TinyGo) | 20.6 s | 0.48x | 1.91 GB |
-| tsrs | 2.73 s | 3.6x | 0.47 GB |
-| ts-rust | 6.09 s | 1.6x | 0.77 GB |
+| **TS6.0** | 8.76 s | 1.0x | 1.70 GB |
+| TS7.0 (Go) | 17.0 s | 0.52x | 1.77 GB |
+| TS7.0 (TinyGo) `-opt=z`（デフォルト） | 32.2 s | 0.27x | 3.44 GB |
+| TS7.0 (TinyGo) `-opt=2` | 31.3 s | 0.28x | 3.63 GB |
+| TS7.0 (TinyGo) 初期メモリ 2GB | 24.4 s | 0.36x | 4.29 GB |
+| TS7.0 (TinyGo) `-gc=leaking` | メモリ不足 | – | – |
+| TS7.1 (Go) | 13.1 s | 0.67x | 1.32 GB |
+| TS7.1 (TinyGo) `-opt=z`（デフォルト） | 18.2 s | 0.48x | 1.92 GB |
+| TS7.1 (TinyGo) `-opt=2` | 16.2 s | 0.54x | 2.09 GB |
+| TS7.1 (TinyGo) 初期メモリ 2GB | 13.2 s | 0.66x | 2.30 GB |
+| TS7.1 (TinyGo) `-gc=leaking` | 8.11 s | 1.1x | 2.55 GB |
+| tsrs `opt-level=s`（デフォルト） | 2.39 s | 3.7x | 0.47 GB |
+| ts-rust `opt-level=z`（デフォルト） | 5.11 s | 1.7x | 0.77 GB |
+| tsrs `opt-level=z` | 2.96 s | 3.0x | 0.46 GB |
+| ts-rust `opt-level=s` | 4.45 s | 2.0x | 0.78 GB |
 
 **[microsoft/playwright](https://github.com/microsoft/playwright)**（`tsconfig.json`: 1,523 ファイル、58.7 万行（うち型定義 36.8 万行）、エラーなし。TS 7.0 発表時のベンチマークの "playwright" の行）
 
 | バリアント | 実行時間 | TS6 比 | ピーク RSS |
 |---|---:|---:|---:|
-| **TS6.0** | 5.15 s | 1.0x | 1.22 GB |
-| TS7.0 (Go) | 9.80 s | 0.53x | 1.16 GB |
-| TS7.0 (TinyGo) | 30.3 s | 0.17x | 1.83 GB |
-| TS7.1 (Go) | 8.11 s | 0.64x | 0.90 GB |
-| TS7.1 (TinyGo) | 19.0 s | 0.27x | 1.10 GB |
-| tsrs | 1.46 s | 3.5x | 0.36 GB |
-| ts-rust | 2.91 s | 1.8x | 0.58 GB |
+| **TS6.0** | 5.24 s | 1.0x | 1.20 GB |
+| TS7.0 (Go) | 9.98 s | 0.53x | 1.16 GB |
+| TS7.0 (TinyGo) `-opt=z`（デフォルト） | 30.2 s | 0.17x | 1.83 GB |
+| TS7.0 (TinyGo) `-opt=2` | 31.0 s | 0.17x | 2.01 GB |
+| TS7.0 (TinyGo) 初期メモリ 2GB | 13.3 s | 0.40x | 2.26 GB |
+| TS7.0 (TinyGo) `-gc=leaking` | 5.89 s | 0.89x | 3.17 GB |
+| TS7.1 (Go) | 8.08 s | 0.65x | 0.90 GB |
+| TS7.1 (TinyGo) `-opt=z`（デフォルト） | 19.0 s | 0.28x | 1.09 GB |
+| TS7.1 (TinyGo) `-opt=2` | 17.7 s | 0.30x | 1.26 GB |
+| TS7.1 (TinyGo) 初期メモリ 2GB | 6.26 s | 0.84x | 1.83 GB |
+| TS7.1 (TinyGo) `-gc=leaking` | 4.53 s | 1.2x | 1.53 GB |
+| tsrs `opt-level=s`（デフォルト） | 1.46 s | 3.6x | 0.37 GB |
+| ts-rust `opt-level=z`（デフォルト） | 2.87 s | 1.8x | 0.57 GB |
+| tsrs `opt-level=z` | 1.82 s | 2.9x | 0.35 GB |
+| ts-rust `opt-level=s` | 2.40 s | 2.2x | 0.59 GB |
 
 **examples/basic**（2 ファイル。同梱の `lib.*.d.ts` のパースとバインドが大半を占める）
 
 | バリアント | 実行時間 | TS6 比 | ピーク RSS |
 |---|---:|---:|---:|
-| **TS6.0** | 407 ms | 1.0x | 0.24 GB |
-| TS7.0 (Go) | 977 ms | 0.42x | 0.35 GB |
-| TS7.0 (TinyGo) | 1,253 ms | 0.32x | 0.42 GB |
-| TS7.1 (Go) | 879 ms | 0.46x | 0.33 GB |
-| TS7.1 (TinyGo) | 851 ms | 0.48x | 0.39 GB |
-| tsrs | 215 ms | 1.9x | 0.16 GB |
-| ts-rust | 330 ms | 1.2x | 0.19 GB |
+| **TS6.0** | 411 ms | 1.0x | 0.25 GB |
+| TS7.0 (Go) | 983 ms | 0.42x | 0.35 GB |
+| TS7.0 (TinyGo) `-opt=z`（デフォルト） | 1,263 ms | 0.33x | 0.41 GB |
+| TS7.0 (TinyGo) `-opt=2` | 1,392 ms | 0.30x | 0.46 GB |
+| TS7.0 (TinyGo) 初期メモリ 2GB | 796 ms | 0.52x | 0.49 GB |
+| TS7.0 (TinyGo) `-gc=leaking` | 614 ms | 0.67x | 0.41 GB |
+| TS7.1 (Go) | 896 ms | 0.46x | 0.33 GB |
+| TS7.1 (TinyGo) `-opt=z`（デフォルト） | 863 ms | 0.48x | 0.40 GB |
+| TS7.1 (TinyGo) `-opt=2` | 841 ms | 0.49x | 0.47 GB |
+| TS7.1 (TinyGo) 初期メモリ 2GB | 724 ms | 0.57x | 0.44 GB |
+| TS7.1 (TinyGo) `-gc=leaking` | 554 ms | 0.74x | 0.34 GB |
+| tsrs `opt-level=s`（デフォルト） | 213 ms | 1.9x | 0.16 GB |
+| ts-rust `opt-level=z`（デフォルト） | 330 ms | 1.2x | 0.19 GB |
+| tsrs `opt-level=z` | 240 ms | 1.7x | 0.14 GB |
+| ts-rust `opt-level=s` | 297 ms | 1.4x | 0.20 GB |
+
+ピーク RSS には Node.js 自身の分も含むので、wasm32 の上限 4GB を超えることがある。
 
 まとめ:
 
-- wasm にコンパイルした Go 移植版は、同じエンジン上で JavaScript として動く TS6 より遅い。social-app で TS7.1 の Go が 0.64x、TinyGo が 0.48x。
-- 7.0 から 7.1 で Go 移植版は速く、省メモリになった。social-app で Go は 19.1 秒・1.78GB から 15.6 秒・1.32GB に、TinyGo は 34.3 秒・3.43GB から 20.6 秒・1.91GB に。
-  7.0 の TinyGo は wasm32 の上限 4GB に近く、これより大きなプロジェクトは厳しい。
-- TinyGo の遅れはプロジェクトが大きくなるほど広がる（後述の GC のため）。`examples/basic` では TS7.1 の TinyGo が Go と並ぶが、Playwright では Go の 2.3 倍かかる。
-- Rust 移植版の wasm ビルドは TS6 より速い。最速は tsrs（TS6 の 3.5〜3.6 倍、メモリは TS6 の 3 分の 1 未満）で、ts-rust は 1.6〜1.8 倍。
+- wasm にコンパイルした Go 移植版は、同じエンジン上で JavaScript として動く TS6 より遅い。social-app で TS7.1 の Go が 0.67x、TinyGo（デフォルト）が 0.48x。
+- 7.0 から 7.1 で Go 移植版は速く、省メモリになった。social-app で Go は 17.0 秒・1.77GB から 13.1 秒・1.32GB に、TinyGo は 32.2 秒・3.44GB から 18.2 秒・1.92GB に。
+- TinyGo のデフォルトの遅れはプロジェクトが大きくなるほど広がる（後述の GC のため）。`examples/basic` では TS7.1 の TinyGo が Go と並ぶが、Playwright では Go の 2.3 倍かかる。
+- TinyGo のビルドオプションでは初期メモリ 2GB が最も効く。TS7.1 では social-app で Go と並び（13.2 秒）、Playwright ではヒープがほぼ初期メモリに収まるので Go より速くなる（6.26 秒、デフォルトの 3 倍速）。
+  TS7.0 では social-app のピーク RSS が 4.29GB に達し、上限に近い。
+- `-gc=leaking`（GC なし）の TS7.1 は TS6 より速い（social-app で 1.1x、Playwright で 1.2x）。TS7.0 は social-app で 4GB を使い切ってメモリ不足になる。
+- `-opt=2` は TS7.1 で 7〜11% 速くなるが、TS7.0 ではほとんど変わらない。どちらもモジュールが 3 割大きくなる。
+- Rust 移植版の wasm ビルドは TS6 より速い。最速は tsrs（デフォルトで TS6 の 3.6〜3.7 倍、メモリは TS6 の 3 分の 1 未満）で、ts-rust は 1.7〜1.8 倍。
+  どちらも `opt-level=s` のほうが `opt-level=z` より 1〜2 割速く、tsrs は上流のデフォルトが `s`、ts-rust は `z`。
 - gzip 後のサイズは TS6 が最小（1.6 MB）。wasm では ts-rust（2.2 MB）と tsrs（2.9 MB）が小さく、TinyGo は標準 Go の約 6 割（6〜7 MB）。
   tsrs のモジュールは ts-rust の約 2 倍の大きさ。ts-rust は `lib.*.d.ts` を圧縮して埋め込むが、tsrs は非圧縮のまま（3.8 MB）埋め込んでいる。
 - `--singleThreaded` なしでは、TinyGo は social-app でメモリ不足になる（ファイルごとの goroutine × 固定長スタック）。1MB スタックでも同様。
 - TS6 と TS7 系のチェッカーは一部のメッセージが異なる。`examples/basic` では TS6 が TS2345 を報告する箇所で、後者は TS2739 を報告する。
 - ブラウザの Playground（Chrome、小さなサンプル）では、1 回の実行に Go と TinyGo のビルドで約 0.9〜1.0 秒、ts-rust で約 0.3 秒かかる（TS 7.1 開発版で計測）。
 
-### バリアント（TS 7.1 開発版で計測）
-
-ベータ前の main（`aa81492`）で計測した、TinyGo のビルドオプションと Rust 移植版の最適化レベルの比較。
-`VARIANTS=1 bench/run.sh ...` でこれらも計測対象に加わる（ビルド済みのものだけ）。
-
-| バリアント（social-app） | モジュール | 実行時間 | ピーク RSS |
-|---|---:|---:|---:|
-| tsc, Go wasip1 | 51.2 MB | 14.1 s | 1.59 GB |
-| tsc, TinyGo wasip1 `-opt=z`（デフォルト） | 20.9 MB | 20.9 s | 1.94 GB |
-| tsc, TinyGo wasip1 `-opt=2` | 28.1 MB | 21.7 s | 2.12 GB |
-| tsc, TinyGo wasip1, 初期メモリ 2GB | 20.9 MB | 15.9 s | 2.30 GB |
-| tsc, TinyGo wasip1 `-gc=leaking` | 18.4 MB | 9.74 s | 2.75 GB |
-| ts-rust wasm `opt-level=z`（デフォルト） | 4.8 MB | 5.58 s | 0.77 GB |
-| ts-rust wasm `opt-level=s` | 6.0 MB | 4.90 s | 0.79 GB |
-| tsrs wasm `opt-level=z` | 8.8 MB | 3.12 s | 0.46 GB |
-| tsrs wasm `opt-level=s`（デフォルト） | 9.9 MB | 2.52 s | 0.47 GB |
-
-- TinyGo は時間の半分以上を GC とアロケーションに費やしている（後述）。初期メモリを 2GB にすると標準 Go に近づき、GC をなくすと TS6 とほぼ並ぶ。
-- `-opt=2` はデフォルトの `-opt=z` に対して速くならず、モジュールが大きくなるだけ。
-
 ### TinyGo が遅い理由
 
-social-app の CPU プロファイル（`node --cpu-prof`）では、時間の約 3 分の 1 が TinyGo の GC、5 分の 1 が `(runtime.gcBlock).findHead` 単体、8% がマップに費やされている。asyncify は 0.2%。
-`-gc=leaking`（一切解放しない）は 2.2 倍速く動く。
+TS 7.1 開発版（ベータ前の main）の social-app の CPU プロファイル（`node --cpu-prof`）では、時間の約 3 分の 1 が TinyGo の GC、5 分の 1 が `(runtime.gcBlock).findHead` 単体、8% がマップに費やされている。asyncify は 0.2%。
+`-gc=leaking`（一切解放しない）は 2.2 倍速く動く（TS7.1 で 18.2 秒から 8.11 秒）。
 
 - TinyGo 0.43 のブロック GC はオブジェクトの先頭を*最後*のブロックに記録するため、オブジェクトの先頭へのポインタをたどると末尾までブロックの状態を走査することになる。つまりポインタ 1 つあたりのコストが、指す先の大きさに比例して増える。
   typescript-go はノードや型をアリーナに確保するので、ほとんどのポインタは大きなチャンクの内部を指している。
 - ヒープは GC 後の空きが 3 分の 1 未満のときにしか拡張されず、GC のたびに生存ヒープ全体を走査する。
   TinyGo では `runtime/debug.SetGCPercent` は何もしない。
 - TinyGo を変更せずに済む方法として、初期メモリを大きくすると、ヒープが小さい初期段階の GC を省ける（`targets/wasip1-mem2g.json`）。
-  2GB が最適値。ヒープは倍々で拡張されるので、2GB なら wasm32 の上限 4GB まであと 1 回拡張できるが、3GB ではできず遅くなる（17.1 秒）。
+  2GB が最適値。ヒープは倍々で拡張されるので、2GB なら wasm32 の上限 4GB まであと 1 回拡張できるが、3GB ではできず遅くなる（TS 7.1 開発版で 17.1 秒）。
+  Playwright のように 1 回の実行で確保する全メモリが 2GB 未満（TS7.1 の `-gc=leaking` で 1.53GB）のプロジェクトでは、GC がほとんど走らないので効果が大きい。
   その分のメモリを最初に確保するため、ブラウザによっては拒否されることがある。
-- `-gc=leaking` は、1 回の実行で確保する全メモリが 4GB に収まる場合にしか使えない（social-app では 2.7GB）。VS Code のようなもっと大きなプロジェクト（TS7 で 4.2GB）ではメモリが足りなくなる。
+- `-gc=leaking` は、1 回の実行で確保する全メモリが 4GB に収まる場合にしか使えない（TS7.1 の social-app では 2.55GB。TS7.0 は 4GB を超えてメモリ不足になる）。VS Code のようなもっと大きなプロジェクト（TS7 で 4.2GB）ではメモリが足りなくなる。
 - TinyGo のランタイムにパッチを当てる方法（ここには含めていない）でも同程度の効果がある。`findHead` で状態がすべて tail のバイトを 8 個ずつ読み飛ばすと social-app で 22%、拡張の条件を空き 3 分の 1 から半分にすると 9%、両方で 27% 短縮した。
 
 ## 言語サーバーのベンチマーク

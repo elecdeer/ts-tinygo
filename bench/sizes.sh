@@ -23,9 +23,17 @@ row() {
 echo "| variant | size | gzip -9 |" | tee "$md"
 echo "|---|---:|---:|" | tee -a "$md"
 row "TS6.0" "$ts6/tsc.js" "$ts6/_tsc.js" "$ts6"/lib.*.d.ts
-row "TS7.0 (Go)" "$out/tsc-go-7.0.wasip1.wasm"
-row "TS7.0 (TinyGo)" "$out/tsc-7.0.wasip1.wasm"
-row "TS7.1 (Go)" "$out/tsc-go.wasip1.wasm"
-row "TS7.1 (TinyGo)" "$out/tsc.wasip1.wasm"
+for v in 7.0 7.1; do
+  s=""
+  [ "$v" = 7.0 ] && s="-7.0"
+  row "TS$v (Go)" "$out/tsc-go$s.wasip1.wasm"
+  row "TS$v (TinyGo)" "$out/tsc$s.wasip1.wasm"
+  row "TS$v (TinyGo -opt=2)" "$out/tsc$s-o2.wasip1.wasm"
+  # Same code as the default build: only the memory section's initial size differs.
+  row "TS$v (TinyGo, initial memory 2GB)" "$out/tsc$s-mem2g.wasip1.wasm"
+  row "TS$v (TinyGo -gc=leaking)" "$out/tsc$s-leaking.wasip1.wasm"
+done
 row "tsrs" "$out/tsrs.wasm"
 row "ts-rust" "$out/ts-rust.wasm"
+row "tsrs opt-level=z" "$out/tsrs-z.wasm"
+row "ts-rust opt-level=s" "$out/ts-rust-s.wasm"
