@@ -2,8 +2,15 @@
 
 TypeScript コンパイラの Go 移植版（`tsc`、TypeScript 7）を [TinyGo](https://tinygo.org/) で WebAssembly にビルドする実験。
 
-コンパイラのソースは [microsoft/TypeScript](https://github.com/microsoft/TypeScript)（`tsc/`）で、`TypeScript` サブモジュールとして固定している。
-`microsoft/typescript-go` は移植版が本家にマージされた後にアーカイブされた。
+コンパイラのソースはサブモジュールとして 2 バージョン固定している。
+
+| サブモジュール | バージョン | ソース |
+|---|---|---|
+| `TypeScript` | 7.1 beta（`v7.1-beta`） | [microsoft/TypeScript](https://github.com/microsoft/TypeScript) の `tsc/` |
+| `typescript-go` | 7.0.2（`typescript/v7.0.2`） | [microsoft/typescript-go](https://github.com/microsoft/typescript-go) |
+
+7.0 は `microsoft/typescript-go` からリリースされ、その後移植版が本家にマージされて `microsoft/typescript-go` はアーカイブされた。
+本家の `v7.0.2` タグは JavaScript 版のツリーを指しているので、7.0 のビルドには `microsoft/typescript-go` を使う。
 
 ## 状況
 
@@ -28,14 +35,20 @@ mise install
 scripts/build.sh            # TinyGo: out/tsc.wasip1.wasm, out/tsc.wasm.wasm
 scripts/build.sh wasip1     # 1 ターゲットのみ
 scripts/build-go.sh         # 標準 Go のベースライン: out/tsc-go.wasip1.wasm, out/tsc-native
+TS_VERSION=7.0 scripts/build.sh wasip1      # 7.0.2: out/tsc-7.0.wasip1.wasm
+TS_VERSION=7.0 scripts/build-go.sh wasip1   # 7.0.2: out/tsc-go-7.0.wasip1.wasm
 SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" scripts/build.sh wasip1   # 速度優先の最適化
 SUFFIX=-mem2g TINYGO_FLAGS="-no-debug -target=$PWD/targets/wasip1-mem2g.json" scripts/build.sh wasip1   # 初期メモリ 2GB
 SUFFIX=-leaking TINYGO_FLAGS="-no-debug -gc=leaking" scripts/build.sh wasip1   # GC なし
 ```
 
-`scripts/build.sh` は同時に 1 つだけ実行すること。サブモジュールにパッチを当てて戻すため。
+`TS_VERSION` のデフォルトは 7.1。
+`scripts/build.sh` は同じバージョンについては同時に 1 つだけ実行すること。サブモジュールにパッチを当てて戻すため。
+`scripts/build-go.sh` もパッチを当てていないソースを前提にしているので、同じバージョンの `scripts/build.sh` と同時に実行しないこと。
 
-`scripts/build.sh` はビルドの間だけ `patches/*.patch` をサブモジュールに当て、終わると元に戻す。
+`scripts/build.sh` はビルドの間だけパッチをサブモジュールに当て、終わると元に戻す。
+7.1 には `patches/*.patch`、7.0 には同じ内容を `typescript-go` のレイアウト（`cmd/tsgo`）に移植した `patches/typescript-go/*.patch` を使う。
+7.0 にはジェネリックメソッドがないので 0001 は不要。
 TinyGo のリンク・最適化フェーズはシングルスレッドなので、ターゲットは並列にビルドする。
 
 ### 回避策
@@ -89,68 +102,117 @@ pnpm run dev
 
 ```sh
 pnpm --dir bench/ts6 install                    # TypeScript 6 のベースライン
-bench/run.sh examples/basic tsconfig.json 10   # 上記のビルドが必要（ts-rust と tsrs は任意）
+scripts/build-go.sh wasip1 && TS_VERSION=7.0 scripts/build-go.sh wasip1
+scripts/build.sh wasip1 && TS_VERSION=7.0 scripts/build.sh wasip1
+scripts/build-tsrs.sh wasm && scripts/build-ts-rust.sh wasm
+bench/sizes.sh
+bench/run.sh examples/basic tsconfig.json 10
+bench/run.sh bench/repos/playwright tsconfig.json 3
 bench/run.sh bench/repos/social-app tsconfig.check.web.json 3
 ```
 
+対象のリポジトリは `bench/repos/` に置く（git の管理外）。
+
+```sh
+git clone https://github.com/bluesky-social/social-app bench/repos/social-app   # 46d98dd を使用
+(cd bench/repos/social-app && pnpm install)
+git clone https://github.com/microsoft/playwright bench/repos/playwright        # 66070a1 を使用
+(cd bench/repos/playwright && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --ignore-scripts && node utils/generate_injected.js)
+```
+
+Playwright は `utils/generate_injected.js` が生成する `packages/playwright-core/src/generated/*Source.ts` がないと型エラーになる。
+
 計測環境は Apple Silicon Mac（14 コア、48GB）、Node.js 26、TypeScript 6.0.3、TinyGo 0.43、Go 1.27.2、Rust 1.99。
 実行時間には Node.js の起動と、wasm の場合は V8 によるモジュールのコンパイルを含む。速度比は TypeScript 6（JavaScript 版 tsc）に対する値。
+wasm の実行はすべて `--singleThreaded` を指定している。TS6 にはこのオプションがなく、もともとシングルスレッドで動く。
+tsrs と ts-rust はそれぞれ上流のデフォルトのビルド（tsrs は `opt-level=s`、ts-rust は `opt-level=z`）。
 生データは `bench/results/` にある。
 
-**[bluesky-social/social-app](https://github.com/bluesky-social/social-app)**（`tsconfig.check.web.json`: 4,989 ファイル、56.5 万行、エラーなし。TS 7.0 発表時のベンチマークの "bluesky" の行）
+### サイズ
 
-| バリアント | モジュール | 実行時間 | TS6 比 | ピーク RSS |
-|---|---:|---:|---:|---:|
-| **TS6**（Node 上の JS 版 tsc） | | 9.12 s | 1.0x | 1.69 GB |
-| tsc ネイティブ（並列） | | 1.23 s | 7.4x | 1.50 GB |
-| tsc ネイティブ `--singleThreaded` | | 2.63 s | 3.5x | 1.05 GB |
-| tsc, Go wasip1 | 51.2 MB | 14.1 s | 0.64x | 1.59 GB |
-| tsc, TinyGo wasip1 `-opt=z`（デフォルト） | 20.9 MB | 20.9 s | 0.44x | 1.94 GB |
-| tsc, TinyGo wasip1 `-opt=2` | 28.1 MB | 21.7 s | 0.42x | 2.12 GB |
-| tsc, TinyGo wasip1, 初期メモリ 2GB | 20.9 MB | 15.9 s | 0.57x | 2.30 GB |
-| tsc, TinyGo wasip1 `-gc=leaking` | 18.4 MB | 9.74 s | 0.94x | 2.75 GB |
-| ts-rust ネイティブ（並列） | | 0.74 s | 12.4x | 1.06 GB |
-| ts-rust ネイティブ `--singleThreaded` | | 1.90 s | 4.8x | 0.75 GB |
-| ts-rust wasm `opt-level=z` | 4.8 MB | 5.58 s | 1.6x | 0.77 GB |
-| ts-rust wasm `opt-level=s` | 6.0 MB | 4.90 s | 1.9x | 0.79 GB |
-| tsrs ネイティブ（並列） | | 0.33 s | 27.9x | 0.85 GB |
-| tsrs ネイティブ `--singleThreaded` | | 1.15 s | 7.9x | 0.39 GB |
-| tsrs wasm `opt-level=z` | 8.8 MB | 3.12 s | 2.9x | 0.46 GB |
-| tsrs wasm `opt-level=s`（デフォルト） | 9.9 MB | 2.52 s | 3.6x | 0.47 GB |
+| バリアント | サイズ | gzip -9 |
+|---|---:|---:|
+| TS6.0 | 10.0 MB | 1.6 MB |
+| TS7.0 (Go) | 49.5 MB | 10.8 MB |
+| TS7.0 (TinyGo) | 20.0 MB | 6.1 MB |
+| TS7.1 (Go) | 50.1 MB | 11.4 MB |
+| TS7.1 (TinyGo) | 21.8 MB | 6.7 MB |
+| tsrs | 9.9 MB | 2.9 MB |
+| ts-rust | 5.1 MB | 2.2 MB |
+
+wasm のモジュールは `lib.*.d.ts` を埋め込んでいるので、TS6 は `tsc.js`・`_tsc.js`（6.2 MB、gzip 1.1 MB）と `lib.*.d.ts`（3.8 MB、gzip 0.6 MB）の合計にしている。
+tsrs と ts-rust の JS グルーコード（数 KB）は含めていない。
+
+### 実行時間とメモリ
+
+**[bluesky-social/social-app](https://github.com/bluesky-social/social-app)**（`tsconfig.check.web.json`: 4,982 ファイル、56.3 万行、エラーなし。TS 7.0 発表時のベンチマークの "bluesky" の行）
+
+| バリアント | 実行時間 | TS6 比 | ピーク RSS |
+|---|---:|---:|---:|
+| **TS6.0** | 9.94 s | 1.0x | 1.70 GB |
+| TS7.0 (Go) | 19.1 s | 0.52x | 1.78 GB |
+| TS7.0 (TinyGo) | 34.3 s | 0.29x | 3.43 GB |
+| TS7.1 (Go) | 15.6 s | 0.64x | 1.32 GB |
+| TS7.1 (TinyGo) | 20.6 s | 0.48x | 1.91 GB |
+| tsrs | 2.73 s | 3.6x | 0.47 GB |
+| ts-rust | 6.09 s | 1.6x | 0.77 GB |
+
+**[microsoft/playwright](https://github.com/microsoft/playwright)**（`tsconfig.json`: 1,523 ファイル、58.7 万行（うち型定義 36.8 万行）、エラーなし。TS 7.0 発表時のベンチマークの "playwright" の行）
+
+| バリアント | 実行時間 | TS6 比 | ピーク RSS |
+|---|---:|---:|---:|
+| **TS6.0** | 5.15 s | 1.0x | 1.22 GB |
+| TS7.0 (Go) | 9.80 s | 0.53x | 1.16 GB |
+| TS7.0 (TinyGo) | 30.3 s | 0.17x | 1.83 GB |
+| TS7.1 (Go) | 8.11 s | 0.64x | 0.90 GB |
+| TS7.1 (TinyGo) | 19.0 s | 0.27x | 1.10 GB |
+| tsrs | 1.46 s | 3.5x | 0.36 GB |
+| ts-rust | 2.91 s | 1.8x | 0.58 GB |
 
 **examples/basic**（2 ファイル。同梱の `lib.*.d.ts` のパースとバインドが大半を占める）
 
 | バリアント | 実行時間 | TS6 比 | ピーク RSS |
 |---|---:|---:|---:|
-| **TS6**（Node 上の JS 版 tsc） | 395 ms | 1.0x | 0.24 GB |
-| tsc ネイティブ（並列） | 109 ms | 3.6x | 0.09 GB |
-| tsc ネイティブ `--singleThreaded` | 116 ms | 3.4x | 0.09 GB |
-| tsc, Go wasip1 | 900 ms | 0.44x | 0.37 GB |
-| tsc, TinyGo wasip1 `-opt=z`（デフォルト） | 1,036 ms | 0.38x | 0.43 GB |
-| tsc, TinyGo wasip1 `-opt=2` | 1,119 ms | 0.35x | 0.46 GB |
-| tsc, TinyGo wasip1, 初期メモリ 2GB | 798 ms | 0.49x | 0.45 GB |
-| tsc, TinyGo wasip1 `-gc=leaking` | 611 ms | 0.65x | 0.35 GB |
-| ts-rust ネイティブ（並列） | 51 ms | 7.8x | 0.07 GB |
-| ts-rust ネイティブ `--singleThreaded` | 57 ms | 7.0x | 0.06 GB |
-| ts-rust wasm `opt-level=z` | 321 ms | 1.2x | 0.19 GB |
-| ts-rust wasm `opt-level=s` | 289 ms | 1.4x | 0.20 GB |
-| tsrs ネイティブ（並列） | 35 ms | 11.4x | 0.06 GB |
-| tsrs ネイティブ `--singleThreaded` | 47 ms | 8.4x | 0.04 GB |
-| tsrs wasm `opt-level=z` | 231 ms | 1.7x | 0.14 GB |
-| tsrs wasm `opt-level=s`（デフォルト） | 210 ms | 1.9x | 0.15 GB |
-
-wasm の実行と `--singleThreaded` の行はすべて `--singleThreaded` を指定している。TS6 にはこのオプションがなく、もともとシングルスレッドで動く。
+| **TS6.0** | 407 ms | 1.0x | 0.24 GB |
+| TS7.0 (Go) | 977 ms | 0.42x | 0.35 GB |
+| TS7.0 (TinyGo) | 1,253 ms | 0.32x | 0.42 GB |
+| TS7.1 (Go) | 879 ms | 0.46x | 0.33 GB |
+| TS7.1 (TinyGo) | 851 ms | 0.48x | 0.39 GB |
+| tsrs | 215 ms | 1.9x | 0.16 GB |
+| ts-rust | 330 ms | 1.2x | 0.19 GB |
 
 まとめ:
 
-- wasm にコンパイルした Go 移植版は、同じエンジン上で JavaScript として動く TS6 より遅い。Go で 0.64x、デフォルトの TinyGo で 0.44x。
-- Rust 移植版の wasm ビルドは TS6 より速い。最速は tsrs（social-app で TS6 の 2.9〜3.6 倍、メモリは TS6 の 3 分の 1 未満）で、ts-rust は 1.6〜1.9 倍。
+- wasm にコンパイルした Go 移植版は、同じエンジン上で JavaScript として動く TS6 より遅い。social-app で TS7.1 の Go が 0.64x、TinyGo が 0.48x。
+- 7.0 から 7.1 で Go 移植版は速く、省メモリになった。social-app で Go は 19.1 秒・1.78GB から 15.6 秒・1.32GB に、TinyGo は 34.3 秒・3.43GB から 20.6 秒・1.91GB に。
+  7.0 の TinyGo は wasm32 の上限 4GB に近く、これより大きなプロジェクトは厳しい。
+- TinyGo の遅れはプロジェクトが大きくなるほど広がる（後述の GC のため）。`examples/basic` では TS7.1 の TinyGo が Go と並ぶが、Playwright では Go の 2.3 倍かかる。
+- Rust 移植版の wasm ビルドは TS6 より速い。最速は tsrs（TS6 の 3.5〜3.6 倍、メモリは TS6 の 3 分の 1 未満）で、ts-rust は 1.6〜1.8 倍。
+- gzip 後のサイズは TS6 が最小（1.6 MB）。wasm では ts-rust（2.2 MB）と tsrs（2.9 MB）が小さく、TinyGo は標準 Go の約 6 割（6〜7 MB）。
   tsrs のモジュールは ts-rust の約 2 倍の大きさ。ts-rust は `lib.*.d.ts` を圧縮して埋め込むが、tsrs は非圧縮のまま（3.8 MB）埋め込んでいる。
-- TinyGo は時間の半分以上を GC とアロケーションに費やしている（後述）。初期メモリを 2GB にすると標準 Go に近づき、GC をなくすと TS6 とほぼ並ぶ。
-- `-opt=2` はデフォルトの `-opt=z` に対して速くならず、モジュールが大きくなるだけ。
 - `--singleThreaded` なしでは、TinyGo は social-app でメモリ不足になる（ファイルごとの goroutine × 固定長スタック）。1MB スタックでも同様。
 - TS6 と TS7 系のチェッカーは一部のメッセージが異なる。`examples/basic` では TS6 が TS2345 を報告する箇所で、後者は TS2739 を報告する。
-- ブラウザの Playground（Chrome、小さなサンプル）では、1 回の実行に Go と TinyGo のビルドで約 0.9〜1.0 秒、ts-rust で約 0.3 秒かかる。
+- ブラウザの Playground（Chrome、小さなサンプル）では、1 回の実行に Go と TinyGo のビルドで約 0.9〜1.0 秒、ts-rust で約 0.3 秒かかる（TS 7.1 開発版で計測）。
+
+### バリアント（TS 7.1 開発版で計測）
+
+ベータ前の main（`aa81492`）で計測した、TinyGo のビルドオプションと Rust 移植版の最適化レベルの比較。
+`VARIANTS=1 bench/run.sh ...` でこれらも計測対象に加わる（ビルド済みのものだけ）。
+
+| バリアント（social-app） | モジュール | 実行時間 | ピーク RSS |
+|---|---:|---:|---:|
+| tsc, Go wasip1 | 51.2 MB | 14.1 s | 1.59 GB |
+| tsc, TinyGo wasip1 `-opt=z`（デフォルト） | 20.9 MB | 20.9 s | 1.94 GB |
+| tsc, TinyGo wasip1 `-opt=2` | 28.1 MB | 21.7 s | 2.12 GB |
+| tsc, TinyGo wasip1, 初期メモリ 2GB | 20.9 MB | 15.9 s | 2.30 GB |
+| tsc, TinyGo wasip1 `-gc=leaking` | 18.4 MB | 9.74 s | 2.75 GB |
+| ts-rust wasm `opt-level=z`（デフォルト） | 4.8 MB | 5.58 s | 0.77 GB |
+| ts-rust wasm `opt-level=s` | 6.0 MB | 4.90 s | 0.79 GB |
+| tsrs wasm `opt-level=z` | 8.8 MB | 3.12 s | 0.46 GB |
+| tsrs wasm `opt-level=s`（デフォルト） | 9.9 MB | 2.52 s | 0.47 GB |
+
+- TinyGo は時間の半分以上を GC とアロケーションに費やしている（後述）。初期メモリを 2GB にすると標準 Go に近づき、GC をなくすと TS6 とほぼ並ぶ。
+- `-opt=2` はデフォルトの `-opt=z` に対して速くならず、モジュールが大きくなるだけ。
 
 ### TinyGo が遅い理由
 
@@ -168,6 +230,8 @@ social-app の CPU プロファイル（`node --cpu-prof`）では、時間の�
 - TinyGo のランタイムにパッチを当てる方法（ここには含めていない）でも同程度の効果がある。`findHead` で状態がすべて tail のバイトを 8 個ずつ読み飛ばすと social-app で 22%、拡張の条件を空き 3 分の 1 から半分にすると 9%、両方で 27% 短縮した。
 
 ## 言語サーバーのベンチマーク
+
+TS 7.1 開発版（ベータ前の main、`aa81492`）で計測した。
 
 エディタから見た各実装の体感速度を測る。サーバーを起動してファイルを開き、診断・編集・補完・ホバーにかかる時間を計測する。
 クライアントは `bench/lsp/run.mjs` で、LSP（pull と push の両方の診断）と tsserver 独自のプロトコルを話す。

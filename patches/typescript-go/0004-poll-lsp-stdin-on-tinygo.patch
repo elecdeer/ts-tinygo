@@ -1,0 +1,156 @@
+diff --git a/cmd/tsgo/lsp.go b/cmd/tsgo/lsp.go
+index bc1a63b6..9aecd2a4 100644
+--- a/cmd/tsgo/lsp.go
++++ b/cmd/tsgo/lsp.go
+@@ -48,7 +48,7 @@ func runLSP(args []string) int {
+ 	defer stop()
+ 
+ 	s := lsp.NewServer(&lsp.ServerOptions{
+-		In:                 lsp.ToReader(os.Stdin),
++		In:                 lsp.ToReader(lspStdin()),
+ 		Out:                lsp.ToWriter(os.Stdout),
+ 		Err:                os.Stderr,
+ 		Cwd:                core.Must(os.Getwd()),
+diff --git a/cmd/tsgo/stdin_other.go b/cmd/tsgo/stdin_other.go
+new file mode 100644
+index 00000000..3b6f8566
+--- /dev/null
++++ b/cmd/tsgo/stdin_other.go
+@@ -0,0 +1,12 @@
++//go:build !(tinygo && wasip1)
++
++package main
++
++import (
++	"io"
++	"os"
++)
++
++func lspStdin() io.Reader {
++	return os.Stdin
++}
+diff --git a/cmd/tsgo/stdin_polling.go b/cmd/tsgo/stdin_polling.go
+new file mode 100644
+index 00000000..26fd9b89
+--- /dev/null
++++ b/cmd/tsgo/stdin_polling.go
+@@ -0,0 +1,34 @@
++package main
++
++import (
++	"errors"
++	"io"
++	"syscall"
++	"time"
++)
++
++// pollingReader reads from a non-blocking reader, sleeping between attempts
++// while it has nothing to read. Sleeping lets a runtime that runs every
++// goroutine on one thread (TinyGo) run the others; a blocking read would stop
++// all of them until the client sends the next message.
++type pollingReader struct {
++	r     io.Reader
++	sleep func(time.Duration)
++}
++
++const (
++	minStdinPoll = time.Millisecond
++	maxStdinPoll = 8 * time.Millisecond
++)
++
++func (p *pollingReader) Read(b []byte) (int, error) {
++	wait := minStdinPoll
++	for {
++		n, err := p.r.Read(b)
++		if n > 0 || !errors.Is(err, syscall.EAGAIN) {
++			return n, err
++		}
++		p.sleep(wait)
++		wait = min(wait*2, maxStdinPoll)
++	}
++}
+diff --git a/cmd/tsgo/stdin_polling_test.go b/cmd/tsgo/stdin_polling_test.go
+new file mode 100644
+index 00000000..e6b3fbea
+--- /dev/null
++++ b/cmd/tsgo/stdin_polling_test.go
+@@ -0,0 +1,50 @@
++package main
++
++import (
++	"errors"
++	"io"
++	"syscall"
++	"testing"
++	"time"
++
++	"gotest.tools/v3/assert"
++)
++
++// scriptedReader returns each step in turn: EAGAIN for "", else that text.
++type scriptedReader struct{ steps []string }
++
++func (s *scriptedReader) Read(b []byte) (int, error) {
++	if len(s.steps) == 0 {
++		return 0, io.EOF
++	}
++	step := s.steps[0]
++	s.steps = s.steps[1:]
++	if step == "" {
++		return 0, syscall.EAGAIN
++	}
++	return copy(b, step), nil
++}
++
++func TestPollingReader(t *testing.T) {
++	t.Run("sleeps through EAGAIN, backing off up to the maximum, then returns the data", func(t *testing.T) {
++		var slept []time.Duration
++		r := &pollingReader{
++			r:     &scriptedReader{steps: []string{"", "", "", "", "", "msg"}},
++			sleep: func(d time.Duration) { slept = append(slept, d) },
++		}
++		b := make([]byte, 8)
++		n, err := r.Read(b)
++		assert.NilError(t, err)
++		assert.Equal(t, string(b[:n]), "msg")
++		assert.DeepEqual(t, slept, []time.Duration{1 * time.Millisecond, 2 * time.Millisecond, 4 * time.Millisecond, 8 * time.Millisecond, 8 * time.Millisecond})
++	})
++
++	t.Run("passes other errors through without sleeping", func(t *testing.T) {
++		r := &pollingReader{
++			r:     &scriptedReader{},
++			sleep: func(time.Duration) { t.Fatal("unexpected sleep") },
++		}
++		_, err := r.Read(make([]byte, 8))
++		assert.Assert(t, errors.Is(err, io.EOF))
++	})
++}
+diff --git a/cmd/tsgo/stdin_tinygo_wasip1.go b/cmd/tsgo/stdin_tinygo_wasip1.go
+new file mode 100644
+index 00000000..d07b7707
+--- /dev/null
++++ b/cmd/tsgo/stdin_tinygo_wasip1.go
+@@ -0,0 +1,23 @@
++//go:build tinygo && wasip1
++
++package main
++
++import (
++	"io"
++	"os"
++	"time"
++)
++
++//go:wasmimport wasi_snapshot_preview1 fd_fdstat_set_flags
++func fdFdstatSetFlags(fd int32, flags uint32) uint32
++
++const fdflagNonblock = 4
++
++// lspStdin makes stdin non-blocking and polls it, so that background work in
++// other goroutines keeps running while the server waits for the client.
++func lspStdin() io.Reader {
++	if fdFdstatSetFlags(0, fdflagNonblock) != 0 {
++		return os.Stdin
++	}
++	return &pollingReader{r: os.Stdin, sleep: time.Sleep}
++}

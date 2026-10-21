@@ -7,3 +7,6 @@
 [submodule "tsrs"]
 	path = tsrs
 	url = https://github.com/oxc-project/tsrs.git
+[submodule "typescript-go"]
+	path = typescript-go
+	url = https://github.com/microsoft/typescript-go.git
