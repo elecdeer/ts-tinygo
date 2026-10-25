@@ -37,6 +37,7 @@ scripts/build.sh wasip1     # 1 ターゲットのみ
 scripts/build-go.sh         # 標準 Go のベースライン: out/tsc-go.wasip1.wasm, out/tsc-native
 TS_VERSION=7.0 scripts/build.sh wasip1      # 7.0.2: out/tsc-7.0.wasip1.wasm
 TS_VERSION=7.0 scripts/build-go.sh wasip1   # 7.0.2: out/tsc-go-7.0.wasip1.wasm
+SUFFIX=-oz WASM_OPT_FLAGS=-Oz scripts/build-go.sh wasip1   # 標準 Go のビルドに wasm-opt をかける: out/tsc-go-oz.wasip1.wasm
 SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" scripts/build.sh wasip1   # 速度優先の最適化
 SUFFIX=-mem2g TINYGO_FLAGS="-no-debug -target=$PWD/targets/wasip1-mem2g.json" scripts/build.sh wasip1   # 初期メモリ 2GB
 SUFFIX=-leaking TINYGO_FLAGS="-no-debug -gc=leaking" scripts/build.sh wasip1   # GC なし
@@ -157,11 +158,13 @@ wasm の実行はすべて `--singleThreaded` を指定している。TS6 には
 |---|---:|---:|
 | **TS6.0** | 10.0 MB | 1.6 MB |
 | TS7.0 (Go) | 49.5 MB | 10.8 MB |
+| TS7.0 (Go) wasm-opt `-Oz` | 44.1 MB | 10.6 MB |
 | TS7.0 (TinyGo) `-opt=z`（デフォルト） | 20.0 MB | 6.1 MB |
 | TS7.0 (TinyGo) `-opt=2` | 26.8 MB | 7.9 MB |
 | TS7.0 (TinyGo) 初期メモリ 2GB | 20.0 MB | 6.1 MB |
 | TS7.0 (TinyGo) `-gc=leaking` | 17.6 MB | 5.3 MB |
 | TS7.1 (Go) | 50.1 MB | 11.4 MB |
+| TS7.1 (Go) wasm-opt `-Oz` | 45.0 MB | 11.1 MB |
 | TS7.1 (TinyGo) `-opt=z`（デフォルト） | 21.8 MB | 6.7 MB |
 | TS7.1 (TinyGo) `-opt=2` | 29.0 MB | 8.6 MB |
 | TS7.1 (TinyGo) 初期メモリ 2GB | 21.8 MB | 6.7 MB |
@@ -177,6 +180,7 @@ tsrs と ts-rust の JS グルーコード（数 KB）は含めていない。�
 ### wasm バイナリの内訳
 
 TS7.1 の Go と TinyGo（デフォルト）のビルドを `bench/wasm-size.mjs` で分解した。7.0 もほぼ同じ構成。
+TinyGo はビルドの最後に wasm-opt（`--asyncify -Oz`）をかけるが、標準 Go のツールチェーンはかけないので、Go のほうはリンカの出力そのまま（wasm-opt をかけた場合は後述）。
 
 ```sh
 node bench/wasm-size.mjs out/tsc-go.wasip1.wasm --embed TypeScript/tsc/internal/bundled/libs/*.d.ts TypeScript/tsc/internal/diagnostics/loc/*.json.gz
@@ -239,6 +243,46 @@ node --test bench/wasm-size.test.mjs
   TinyGo では埋め込みファイルがデータの 4 分の 3 を占める。
 - Go のリンカは 8 バイト以上続くゼロを省いてデータを複数のセグメントに分ける（上限 100,000 個）。今回は上限に達しており、ヘッダに 0.81 MB かかる代わりにゼロ 1.78 MB を省いている。
 - name セクションは実行に不要で、Go の `-ldflags="-s -w"` か wabt の `wasm-strip` で削れる。削ると Go で 1.65 MB、TinyGo で 1.77 MB 小さくなるが、gzip 後の差はどちらも約 0.2 MB。
+
+**code だけで TS6 の JavaScript 全体より大きい理由**
+
+TS6 の `tsc` の本体（`_tsc.js`）は 6.24 MB で、esbuild で minify すると 2.83 MB（gzip 0.73 MB）になる。wasm の code はこれより大きいが、同じものを比べているわけではない。
+
+- wasm には言語サーバーと API（`internal/ls`・`lsp`・`project`・`api`・`format`）も入っている。これが TinyGo で約 3.5 MB、Go で約 6.3 MB ある。
+  TS6 で言語サービスまで含む `typescript.js` は 9.14 MB（minify で 3.60 MB、gzip 1.03 MB）。
+- JavaScript は GC・`Map`・文字列操作・正規表現・JSON・Unicode の処理を V8 に任せられるが、wasm はこれを自前で持つ。標準ライブラリとランタイムは Go で 5.5 MB、TinyGo で 2.2 MB（C・wasi-libc を含む）。
+- wasm は機械語に近い。JavaScript の `node.kind` のような短い式が、wasm では nil チェックとメモリの読み込みになる。Go では関数ごとにスタックのチェックと再開用の分岐が、ポインタの書き込みごとに GC のライトバリアが加わる。TinyGo では asyncify が code を 2 倍にしている。
+- ジェネリクスやインライン展開で、同じソースから型ごとに別のコードができる。TinyGo ではインターフェースのメソッド呼び出しの中継（0.45 MB）も生成される。
+- JavaScript のソースはテキストなので圧縮が効く。minify と gzip で `typescript.js` は 1.03 MB になるが、TinyGo の code は gzip で 4.21 MB（asyncify なしでも 2.57 MB）。
+
+### 標準 Go のビルドに wasm-opt をかけた場合
+
+`SUFFIX=-oz WASM_OPT_FLAGS=-Oz scripts/build-go.sh wasip1` は Go の出力に wasm-opt `-Oz` をかける。
+Go のモジュールには使う機能の宣言（`target_features` セクション）がないので、Go が出力する bulk memory・sign-ext・飽和変換を明示的に有効にしている。
+examples/basic・Playwright・social-app の診断と、Playwright を出力した 2,170 ファイル（`.js`・`.d.ts`・`.map`）は、`--singleThreaded` の有無にかかわらず元のビルドと一致した。
+
+| | TS7.1 (Go) | TS7.1 (Go) wasm-opt `-Oz` |
+|---|---:|---:|
+| 全体 | 50.12 MB（gzip 11.36 MB） | 44.98 MB（gzip 11.10 MB） |
+| code | 25.63 MB（gzip 5.79 MB） | 22.14 MB（gzip 5.74 MB） |
+| data | 22.78 MB（gzip 5.40 MB） | 22.78 MB（gzip 5.40 MB） |
+| name | 1.65 MB（gzip 0.21 MB） | なし |
+
+TS7.0 では 49.55 MB（gzip 10.84 MB）から 44.12 MB（gzip 10.58 MB）になった。
+
+| バリアント | basic | Playwright | social-app |
+|---|---:|---:|---:|
+| **TS6.0** | 398 ms | 4.82 s | 9.66 s |
+| TS7.0 (Go) | 949 ms | 8.62 s | 17.8 s |
+| TS7.0 (Go) wasm-opt `-Oz` | 910 ms | 8.88 s | 17.1 s |
+| TS7.1 (Go) | 888 ms | 7.59 s | 14.1 s |
+| TS7.1 (Go) wasm-opt `-Oz` | 872 ms | 7.01 s | 13.8 s |
+
+実行時間は `ONLY='^TS6\.0$|\(Go' OUT=go-wasm-opt VARIANTS=1 bench/run.sh ...` で別に計測したもので、上の表とは別の回。ピーク RSS は変わらなかった。
+
+- wasm-opt は code を 14% 削り、既定で name セクションを落とすが、gzip 後は 2% しか小さくならない。data は Go のリンカがすでにゼロを省いているので変わらない。
+- 実行時間の差は -8〜+3% で、計測のばらつき（標準偏差で最大 0.5 秒）の範囲に収まる。
+- Go と TinyGo のサイズの差は、wasm-opt の有無ではほとんど説明できない。
 
 ### 実行時間とメモリ
 

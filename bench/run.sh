@@ -3,7 +3,10 @@
 # tsrs and ts-rust against TypeScript 6 (the JavaScript tsc on Node).
 # usage: bench/run.sh <project-dir> <tsconfig> [runs]
 # SKIP_TIMING=1 only measures peak memory.
-# VARIANTS=1 adds the Rust ports' other optimization levels (tsrs opt-level=z, ts-rust opt-level=s).
+# VARIANTS=1 adds the Rust ports' other optimization levels (tsrs opt-level=z, ts-rust opt-level=s)
+#   and the standard Go builds run through wasm-opt -Oz, when they are built.
+# ONLY=<regex> keeps the variants whose names match; their results go to bench/results/<project>-<OUT>.*
+#   when OUT is set, e.g. ONLY='^TS6|Go' OUT=go-wasm-opt VARIANTS=1
 # Prerequisites: pnpm --dir bench/ts6 install, scripts/build-go.sh wasip1, scripts/build.sh wasip1
 #   and the TinyGo variants in README.md (-opt=2, initial memory 2GB, -gc=leaking), each also with
 #   TS_VERSION=7.0, scripts/build-tsrs.sh wasm, scripts/build-ts-rust.sh wasm
@@ -15,7 +18,7 @@ tsconfig="$2"
 runs="${3:-3}"
 out="$root/out"
 results="$root/bench/results"
-name="$(basename "$project")"
+name="$(basename "$project")${OUT:+-$OUT}"
 mkdir -p "$results"
 
 wasi="node --no-warnings $root/scripts/run-wasi.mjs"
@@ -43,6 +46,21 @@ add "ts-rust" "$tsrust $out/ts-rust.wasm $args --singleThreaded"
 if [ -n "${VARIANTS:-}" ]; then
   [ -f "$out/tsrs-z.wasm" ] && add "tsrs opt-level=z" "$tsrs $out/tsrs-z.wasm $args --singleThreaded"
   [ -f "$out/ts-rust-s.wasm" ] && add "ts-rust opt-level=s" "$tsrust $out/ts-rust-s.wasm $args --singleThreaded"
+  [ -f "$out/tsc-go-7.0-oz.wasip1.wasm" ] && add "TS7.0 (Go, wasm-opt -Oz)" "$wasi $out/tsc-go-7.0-oz.wasip1.wasm $args --singleThreaded"
+  [ -f "$out/tsc-go-oz.wasip1.wasm" ] && add "TS7.1 (Go, wasm-opt -Oz)" "$wasi $out/tsc-go-oz.wasip1.wasm $args --singleThreaded"
+fi
+
+if [ -n "${ONLY:-}" ]; then
+  kept_names=()
+  kept_cmds=()
+  for i in "${!cmds[@]}"; do
+    if [[ "${names[$i]}" =~ $ONLY ]]; then
+      kept_names+=("${names[$i]}")
+      kept_cmds+=("${cmds[$i]}")
+    fi
+  done
+  names=("${kept_names[@]}")
+  cmds=("${kept_cmds[@]}")
 fi
 
 hf=()

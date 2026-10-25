@@ -2,11 +2,13 @@
 |---|---:|---:|
 | TS6.0 | 10.0 MB | 1.6 MB |
 | TS7.0 (Go) | 49.5 MB | 10.8 MB |
+| TS7.0 (Go, wasm-opt -Oz) | 44.1 MB | 10.6 MB |
 | TS7.0 (TinyGo) | 20.0 MB | 6.1 MB |
 | TS7.0 (TinyGo -opt=2) | 26.8 MB | 7.9 MB |
 | TS7.0 (TinyGo, initial memory 2GB) | 20.0 MB | 6.1 MB |
 | TS7.0 (TinyGo -gc=leaking) | 17.6 MB | 5.3 MB |
 | TS7.1 (Go) | 50.1 MB | 11.4 MB |
+| TS7.1 (Go, wasm-opt -Oz) | 45.0 MB | 11.1 MB |
 | TS7.1 (TinyGo) | 21.8 MB | 6.7 MB |
 | TS7.1 (TinyGo -opt=2) | 29.0 MB | 8.6 MB |
 | TS7.1 (TinyGo, initial memory 2GB) | 21.8 MB | 6.7 MB |

@@ -27,6 +27,7 @@ for v in 7.0 7.1; do
   s=""
   [ "$v" = 7.0 ] && s="-7.0"
   row "TS$v (Go)" "$out/tsc-go$s.wasip1.wasm"
+  [ -f "$out/tsc-go$s-oz.wasip1.wasm" ] && row "TS$v (Go, wasm-opt -Oz)" "$out/tsc-go$s-oz.wasip1.wasm"
   row "TS$v (TinyGo)" "$out/tsc$s.wasip1.wasm"
   row "TS$v (TinyGo -opt=2)" "$out/tsc$s-o2.wasip1.wasm"
   # Same code as the default build: only the memory section's initial size differs.
