@@ -1,6 +1,7 @@
 [tools]
 "aqua:Kitware/CMake" = "4.4.4"
 "aqua:WebAssembly/binaryen" = "133"
+"aqua:WebAssembly/wabt" = "1.0.42"
 "github:sharkdp/hyperfine" = "2.0.0"
 go = "1.27.2"
 rust = "1.99.0"

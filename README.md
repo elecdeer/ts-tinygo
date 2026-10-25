@@ -21,7 +21,7 @@ TypeScript コンパイラの Go 移植版（`tsc`、TypeScript 7）を [TinyGo]
 
 ## セットアップ
 
-ツールは `mise.toml` で固定している（Go、TinyGo、`wasm-opt` 用の binaryen、hyperfine、ts-rust 用の Rust、tsrs の mimalloc 用の CMake）。
+ツールは `mise.toml` で固定している（Go、TinyGo、`wasm-opt` 用の binaryen、`wasm-strip` などの wabt、hyperfine、ts-rust 用の Rust、tsrs の mimalloc 用の CMake）。
 tsrs は `tsrs/rust-toolchain.toml` で独自に Rust のバージョンを固定しており、初回使用時に rustup がインストールする。
 
 ```sh
@@ -173,6 +173,72 @@ wasm の実行はすべて `--singleThreaded` を指定している。TS6 には
 
 wasm のモジュールは `lib.*.d.ts` を埋め込んでいるので、TS6 は `tsc.js`・`_tsc.js`（6.2 MB、gzip 1.1 MB）と `lib.*.d.ts`（3.8 MB、gzip 0.6 MB）の合計にしている。
 tsrs と ts-rust の JS グルーコード（数 KB）は含めていない。初期メモリ 2GB のビルドはメモリセクションの初期サイズが違うだけで、コードはデフォルトと同じ。
+
+### wasm バイナリの内訳
+
+TS7.1 の Go と TinyGo（デフォルト）のビルドを `bench/wasm-size.mjs` で分解した。7.0 もほぼ同じ構成。
+
+```sh
+node bench/wasm-size.mjs out/tsc-go.wasip1.wasm --embed TypeScript/tsc/internal/bundled/libs/*.d.ts TypeScript/tsc/internal/diagnostics/loc/*.json.gz
+node bench/wasm-size.mjs out/tsc.wasip1.wasm --embed TypeScript/tsc/internal/bundled/libs/*.d.ts TypeScript/tsc/internal/diagnostics/loc/*.json.gz
+node --test bench/wasm-size.test.mjs
+```
+
+関数ごとのコードサイズは名前セクションの関数名から、Go のデータの区分は `runtime.moduledata` が指す範囲から求めている。
+`--embed` に渡したファイルは、データ中にそのままの形で見つかったものを数える。gzip はセクションごとに圧縮した値で、目安。
+生の出力は `bench/results/wasm-size.md` にある。
+
+| セクション | Go | TinyGo |
+|---|---:|---:|
+| code（関数本体） | 25.63 MB（gzip 5.79 MB） | 13.38 MB（gzip 4.21 MB） |
+| data（静的データ） | 22.78 MB（gzip 5.40 MB） | 6.61 MB（gzip 2.27 MB） |
+| name（関数名。実行には不要） | 1.65 MB（gzip 0.21 MB） | 1.77 MB（gzip 0.19 MB） |
+| その他 | 0.06 MB | 0.03 MB |
+| 合計 | 50.12 MB | 21.79 MB |
+
+**code**（関数本体の合計。Go 25.59 MB、TinyGo 13.35 MB）
+
+| パッケージ | Go | TinyGo |
+|---|---:|---:|
+| コンパイラ本体（`internal/*`） | 19.55 MB | 10.59 MB |
+| 　うち `internal/checker` | 4.52 MB | 2.61 MB |
+| 　うち `internal/ls`（言語サービス） | 2.32 MB | 1.24 MB |
+| 　うち `internal/ast` | 1.13 MB | 0.58 MB |
+| 標準ライブラリ | 4.12 MB | 1.88 MB |
+| ランタイム | 1.40 MB | 0.09 MB |
+| 外部の依存（`golang.org/x/text` など） | 0.26 MB | 0.13 MB |
+| その他（Go: 型の比較・ハッシュ関数。TinyGo: インターフェースのメソッド呼び出し、C・wasi-libc） | 0.24 MB | 0.65 MB |
+
+- TinyGo のコードは Go の約半分だが、そのさらに半分は asyncify による。TinyGo は goroutine の切り替えを asyncify（Binaryen のパス）で実現しており、関数ごとにスタックを退避・復元するコードが加わる。
+  `-work` で残したリンク直後のモジュール（code 7.96 MB）に wasm-opt を手で適用すると、`-Oz` だけなら code は 6.52 MB（gzip 2.57 MB）、TinyGo と同じ `--asyncify -Oz` なら 13.38 MB（gzip 4.21 MB）になる。asyncify が code を 2.1 倍にしている。
+- Go のコードは関数あたりでも大きい（`internal/checker` で 1.7 倍）。Go の wasm バックエンドは goroutine のスタックを線形メモリ上に自前で持ち、関数の途中から再開するための分岐を各関数に入れている。
+  ただし繰り返しが多いので圧縮が効き、gzip 後の差は 5.79 MB 対 4.21 MB まで縮まる。
+- TinyGo で名前からランタイムに分類できる関数は 0.09 MB しかない。残りは呼び出し元にインライン展開されたか、名前のない関数（0.20 MB の「C・wasi-libc」に含まれる）になっている。
+
+**data**
+
+| 中身 | Go | TinyGo |
+|---|---:|---:|
+| 埋め込みファイル: `lib.*.d.ts`（非圧縮） | 3.87 MB | 3.87 MB |
+| 埋め込みファイル: 翻訳メッセージ（`loc/*.json.gz`） | 1.14 MB | 1.14 MB |
+| pclntab | 12.35 MB | – |
+| 　うち関数ごとのメタデータ（`go:func.*`: GC 用のスタックマップ、インライン展開の情報など） | 6.20 MB | – |
+| 　うち関数名（`funcnametab`） | 2.29 MB | – |
+| 　うち PC から行番号やスタックの深さを引く表（`pctab`） | 2.10 MB | – |
+| 　うち関数の表（`ftab`、`_func`） | 1.64 MB | – |
+| 　うちファイル名（`filetab`、`cutab`） | 0.12 MB | – |
+| 型情報（`types`） | 3.41 MB | – |
+| その他の読み取り専用データ（文字列など） | 0.79 MB | – |
+| 変数の初期値（`noptrdata`、`data`） | 0.41 MB | – |
+| 文字列・型情報・変数の初期値 | – | 1.55 MB |
+| セグメントのヘッダ | 0.81 MB | 0.05 MB |
+
+- Go のデータの半分以上は pclntab で、スタックトレースに出す関数名・行番号と、GC がスタック上のポインタを正確に見つけるためのスタックマップを持つ。
+  TinyGo はスタックを保守的にスキャンし、パニック時にスタックトレースも出さないので、これを持たない。Go と TinyGo のデータの差（16.2 MB）は、ほぼ pclntab と型情報で説明できる。
+- 埋め込みファイル（5.01 MB）は両方に同じものが入っている。`lib.*.d.ts` は非圧縮のまま埋め込まれていて、gzip で配信すると埋め込みファイル全体で 1.71 MB になる（翻訳メッセージはもともと gzip 済み）。
+  TinyGo では埋め込みファイルがデータの 4 分の 3 を占める。
+- Go のリンカは 8 バイト以上続くゼロを省いてデータを複数のセグメントに分ける（上限 100,000 個）。今回は上限に達しており、ヘッダに 0.81 MB かかる代わりにゼロ 1.78 MB を省いている。
+- name セクションは実行に不要で、Go の `-ldflags="-s -w"` か wabt の `wasm-strip` で削れる。削ると Go で 1.65 MB、TinyGo で 1.77 MB 小さくなるが、gzip 後の差はどちらも約 0.2 MB。
 
 ### 実行時間とメモリ
 
