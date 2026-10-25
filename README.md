@@ -38,6 +38,8 @@ scripts/build-go.sh         # 標準 Go のベースライン: out/tsc-go.wasip1
 TS_VERSION=7.0 scripts/build.sh wasip1      # 7.0.2: out/tsc-7.0.wasip1.wasm
 TS_VERSION=7.0 scripts/build-go.sh wasip1   # 7.0.2: out/tsc-go-7.0.wasip1.wasm
 SUFFIX=-oz WASM_OPT_FLAGS=-Oz scripts/build-go.sh wasip1   # 標準 Go のビルドに wasm-opt をかける: out/tsc-go-oz.wasip1.wasm
+SUFFIX=-cli TINYGO_FLAGS="-no-debug -tags=clionly" scripts/build.sh wasip1   # 言語サーバーと API なし: out/tsc-cli.wasip1.wasm
+SUFFIX=-cli GO_BUILD_TAGS=clionly scripts/build-go.sh wasip1   # 同じく標準 Go: out/tsc-go-cli.wasip1.wasm
 SUFFIX=-o2 TINYGO_FLAGS="-no-debug -opt=2" scripts/build.sh wasip1   # 速度優先の最適化
 SUFFIX=-mem2g TINYGO_FLAGS="-no-debug -target=$PWD/targets/wasip1-mem2g.json" scripts/build.sh wasip1   # 初期メモリ 2GB
 SUFFIX=-leaking TINYGO_FLAGS="-no-debug -gc=leaking" scripts/build.sh wasip1   # GC なし
@@ -255,6 +257,8 @@ TS6 の `tsc` の本体（`_tsc.js`）は 6.24 MB で、esbuild で minify す�
 - ジェネリクスやインライン展開で、同じソースから型ごとに別のコードができる。TinyGo ではインターフェースのメソッド呼び出しの中継（0.45 MB）も生成される。
 - JavaScript のソースはテキストなので圧縮が効く。minify と gzip で `typescript.js` は 1.03 MB になるが、TinyGo の code は gzip で 4.21 MB（asyncify なしでも 2.57 MB）。
 
+範囲をそろえた比較は後述。
+
 ### 標準 Go のビルドに wasm-opt をかけた場合
 
 `SUFFIX=-oz WASM_OPT_FLAGS=-Oz scripts/build-go.sh wasip1` は Go の出力に wasm-opt `-Oz` をかける。
@@ -283,6 +287,52 @@ TS7.0 では 49.55 MB（gzip 10.84 MB）から 44.12 MB（gzip 10.58 MB）にな
 - wasm-opt は code を 14% 削り、既定で name セクションを落とすが、gzip 後は 2% しか小さくならない。data は Go のリンカがすでにゼロを省いているので変わらない。
 - 実行時間の差は -8〜+3% で、計測のばらつき（標準偏差で最大 0.5 秒）の範囲に収まる。
 - Go と TinyGo のサイズの差は、wasm-opt の有無ではほとんど説明できない。
+
+### 範囲をそろえたサイズの比較
+
+TS6 と範囲をそろえて、プログラム本体の大きさを比べる。
+
+- wasm は、埋め込みファイル（`lib.*.d.ts` と翻訳メッセージ）と custom セクション（name など、実行に不要なもの）を除いた大きさ。
+  gzip は埋め込みファイルの部分をゼロで埋めてから圧縮した値。`bench/wasm-size.mjs` の最後の表（`program`）がこれを出し、全ビルドの値は `bench/results/program-size.md` にある。
+- TS6 は `lib.*.d.ts` と翻訳メッセージを別のファイルで持つので、JavaScript のファイルだけを数える。英語の診断メッセージはどちらもプログラム本体に含まれる。
+  minify は esbuild 0.28 の `--minify`。
+- 言語サービス込みは、TS6 が `typescript.js`・`_tsserver.js`・`tsserver.js`（コンパイラ・CLI・言語サービス・サーバー）、wasm が通常のビルド。
+- CLI だけは、TS6 が `tsc.js`・`_tsc.js`、wasm が言語サーバーと API を外したビルド（[0005](patches/0005-add-clionly-build-tag.patch)。ビルドタグ `clionly` を付けたときだけ `--lsp`・`--api` を外す。TS7.1 のみ）。
+  tsrs と ts-rust の wasm ビルドにはもともと言語サーバーがない。ts-rust は `lib.*.d.ts` を LZMA で圧縮して埋め込んでおり（0.32 MB）、その分を除いている。
+
+**言語サービス込み**
+
+| バリアント | サイズ | gzip -9 |
+|---|---:|---:|
+| **TS6.0** | 9.17 MB（minify 3.62 MB） | 1.65 MB（minify 1.03 MB） |
+| TS7.0 (Go) | 42.88 MB | 9.06 MB |
+| TS7.0 (Go) wasm-opt `-Oz` | 39.25 MB | 9.02 MB |
+| TS7.0 (TinyGo) `-opt=z`（デフォルト）、初期メモリ 2GB | 13.58 MB | 4.30 MB |
+| TS7.0 (TinyGo) `-opt=2` | 20.55 MB | 6.09 MB |
+| TS7.0 (TinyGo) `-gc=leaking` | 11.25 MB | 3.53 MB |
+| TS7.1 (Go) | 43.46 MB | 9.53 MB |
+| TS7.1 (Go) wasm-opt `-Oz` | 39.97 MB | 9.48 MB |
+| TS7.1 (TinyGo) `-opt=z`（デフォルト）、初期メモリ 2GB | 15.01 MB | 4.80 MB |
+| TS7.1 (TinyGo) `-opt=2` | 22.50 MB | 6.77 MB |
+| TS7.1 (TinyGo) `-gc=leaking` | 12.45 MB | 3.93 MB |
+
+**CLI だけ**
+
+| バリアント | サイズ | gzip -9 |
+|---|---:|---:|
+| **TS6.0** | 6.24 MB（minify 2.83 MB） | 1.09 MB（minify 0.73 MB） |
+| TS7.1 (Go) | 30.00 MB | 6.76 MB |
+| TS7.1 (TinyGo) | 9.93 MB | 3.14 MB |
+| tsrs `opt-level=s`（デフォルト） | 6.12 MB | 2.33 MB |
+| tsrs `opt-level=z` | 4.99 MB | 1.99 MB |
+| ts-rust `opt-level=z`（デフォルト） | 4.75 MB | 1.86 MB |
+| ts-rust `opt-level=s` | 5.98 MB | 2.27 MB |
+
+- 言語サーバーと API は、gzip 後で TinyGo の 1.7 MB（4.80 MB → 3.14 MB）、Go の 2.8 MB（9.53 MB → 6.76 MB）を占める。
+- 範囲をそろえても、TS6 を minify して gzip したものとの差は大きい。CLI だけで TinyGo は 4.3 倍、Go は 9.3 倍。
+  前述の理由のうち範囲の違い以外（ランタイムと標準ライブラリ、機械語に近い表現、asyncify、圧縮の効きにくさ）で、差の大部分が説明できる。
+- wasm の中で最も小さいのは Rust 移植版だが、それでも TS6 の CLI を minify して gzip したもの（0.73 MB）の 2.5〜3.2 倍ある。
+- 初期メモリ 2GB のビルドは、メモリの初期サイズ以外はデフォルトと同じ。
 
 ### 実行時間とメモリ
 

@@ -4,6 +4,8 @@
 # TS_VERSION picks the compiler source (default: 7.1); 7.0 builds go to out/tsc-go-7.0.wasip1.wasm etc.
 # WASM_OPT_FLAGS runs wasm-opt on the wasip1 build, which the Go toolchain never does, and SUFFIX
 # names its output, e.g. SUFFIX=-oz WASM_OPT_FLAGS=-Oz -> out/tsc-go-oz.wasip1.wasm
+# GO_BUILD_TAGS builds with those tags, applying only the patches that act on a tag (7.1 only),
+# e.g. SUFFIX=-cli GO_BUILD_TAGS=clionly -> out/tsc-go-cli.wasip1.wasm without the language server
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,6 +17,17 @@ source "$root/scripts/ts-version.sh"
 
 mkdir -p "$out"
 export GOWORK=off
+
+# Without tags, build the source as it is: the baseline for TinyGo's patched build.
+if [ -n "${GO_BUILD_TAGS:-}" ]; then
+  if [ ${#ts_tag_patches[@]} -eq 0 ]; then
+    echo "GO_BUILD_TAGS needs patches for TS_VERSION=${TS_VERSION:-7.1}" >&2
+    exit 2
+  fi
+  git -C "$ts_repo" apply "${ts_tag_patches[@]}"
+  trap 'git -C "$ts_repo" apply -R "${ts_tag_patches[@]}"' EXIT
+  export GOFLAGS="${GOFLAGS:+$GOFLAGS }-tags=$GO_BUILD_TAGS"
+fi
 
 pids=()
 for t in "${targets[@]}"; do

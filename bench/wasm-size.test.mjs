@@ -9,6 +9,7 @@ import {
   overlap,
   packageOf,
   parseWasm,
+  programBytes,
   storedBytes,
 } from "./wasm-size.mjs";
 
@@ -174,5 +175,26 @@ describe("embeddedBytes and overlap", () => {
     ]);
     assert.deepEqual(result, { found: 10, ranges: [[2, 7], [9, 14]], missing: ["c"] });
     assert.equal(overlap(result.ranges, [0, 10]), 6);
+  });
+});
+
+describe("programBytes", () => {
+  it("drops custom sections and zeroes the given memory ranges in the data segments", () => {
+    const module = sampleModule();
+    const parsed = parseWasm(module);
+    const program = programBytes(module, parsed, [[17, 18], [33, 40]]);
+    const reparsed = parseWasm(program);
+    assert.deepEqual(reparsed.sections.map((s) => s.name), ["type", "import", "function", "memory", "code", "data"]);
+    assert.deepEqual(
+      reparsed.segments.map((s) => [s.offset, [...s.bytes]]),
+      [[16, [1, 0, 3]], [32, [4, 0]]],
+    );
+  });
+
+  it("leaves the module it was given unchanged", () => {
+    const module = sampleModule();
+    const before = [...module];
+    programBytes(module, parseWasm(module), [[16, 40]]);
+    assert.deepEqual([...module], before);
   });
 });

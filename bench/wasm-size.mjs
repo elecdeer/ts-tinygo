@@ -1,7 +1,8 @@
 // Break a tsc wasm build's size down by section, by package (code) and by kind of data.
 // usage: node bench/wasm-size.mjs <module.wasm> [--embed <file> ...]
 // --embed names files that the build embeds (lib.*.d.ts, the localized messages); each one found
-// verbatim in the data is counted under "embedded files".
+// verbatim in the data is counted under "embedded files", and left out of the "program" size, which
+// also leaves out the custom sections (names and other metadata the module runs without).
 // Function names come from the name section; the Go toolchain writes "/" in them as "_".
 // For the standard Go toolchain, the data is split into regions by its runtime.moduledata.
 import { readFileSync } from "node:fs";
@@ -73,12 +74,13 @@ export function parseWasm(bytes) {
   const names = new Map();
   let importedFuncs = 0;
   while (r.pos < bytes.length) {
+    const start = r.pos;
     const id = bytes[r.pos++];
     const size = r.u32();
     const end = r.pos + size;
     let name = sectionNames[id] ?? `unknown(${id})`;
     if (id === 0) name = `custom "${new Reader(bytes, r.pos).name()}"`;
-    sections.push({ name, size, bytes: bytes.subarray(r.pos, end) });
+    sections.push({ id, name, size, start, end, bytes: bytes.subarray(r.pos, end) });
     if (id === 2) {
       for (let i = 0, n = r.u32(); i < n; i++) {
         r.name();
@@ -280,6 +282,29 @@ export function overlap(ranges, [start, end]) {
   return ranges.reduce((a, [lo, hi]) => a + Math.max(0, Math.min(end, hi) - Math.max(start, lo)), 0);
 }
 
+/**
+ * Returns the module without its custom sections and with the given ranges of linear memory zeroed
+ * in its data segments, so that its gzip size leaves out what the ranges hold (runs of zeros
+ * compress to almost nothing). The module's length still counts the zeroed bytes.
+ * @param {Uint8Array} bytes the module
+ * @param {ReturnType<typeof parseWasm>} parsed
+ * @param {[number, number][]} ranges
+ */
+export function programBytes(bytes, { sections, segments }, ranges) {
+  const copy = Uint8Array.from(bytes);
+  for (const seg of segments) {
+    if (seg.offset < 0) continue;
+    const at = seg.bytes.byteOffset - bytes.byteOffset;
+    for (const [lo, hi] of ranges) {
+      const from = Math.max(lo, seg.offset);
+      const to = Math.min(hi, seg.offset + seg.bytes.length);
+      if (to > from) copy.fill(0, at + from - seg.offset, at + to - seg.offset);
+    }
+  }
+  const kept = sections.filter((s) => s.id !== 0).map((s) => copy.subarray(s.start, s.end));
+  return Buffer.concat([copy.subarray(0, 8), ...kept]);
+}
+
 /** Formats a byte count in MB (10^6 bytes), like bench/sizes.sh. */
 function mb(bytes) {
   return `${(bytes / 1e6).toFixed(2)} MB`;
@@ -298,7 +323,8 @@ function main(argv) {
     embedFiles.push({ name: basename(rest[i]), bytes: readFileSync(rest[i]) });
   }
   const bytes = readFileSync(file);
-  const { sections, functions, segments } = parseWasm(bytes);
+  const parsed = parseWasm(bytes);
+  const { sections, functions, segments } = parsed;
   const mem = linearMemory(segments);
   const regions = goRegions(mem);
   const toolchain = regions ? "go" : "tinygo";
@@ -343,6 +369,10 @@ function main(argv) {
     }
     console.log(`| rodata: embedded files | ${mb(overlap(embedded.ranges, regions.rodata))} |`);
   }
+
+  const program = programBytes(bytes, parsed, embedded.ranges);
+  console.log(`\n| program (no custom sections or embedded files) | size | gzip -9 |\n|---|---:|---:|`);
+  console.log(`| module | ${mb(program.length - embedded.found)} | ${mb(gzipSync(program, { level: 9 }).length)} |`);
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
