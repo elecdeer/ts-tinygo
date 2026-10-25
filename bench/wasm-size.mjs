@@ -3,7 +3,7 @@
 // --embed names files that the build embeds (lib.*.d.ts, the localized messages); each one found
 // verbatim in the data is counted under "embedded files", and left out of the "program" size, which
 // also leaves out the custom sections (names and other metadata the module runs without).
-// Function names come from the name section; the Go toolchain writes "/" in them as "_".
+// Function names come from the name section; the Go toolchain writes "/" and "-" in them as "_".
 // For the standard Go toolchain, the data is split into regions by its runtime.moduledata.
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -181,11 +181,12 @@ export function packageOf(name, toolchain) {
 
 /**
  * Groups packages for the summary: the compiler's own packages by their path inside the module,
- * everything else as is.
+ * everything else as is. 7.0's module, typescript-go, reads typescript/go in the standard Go
+ * toolchain's names, which write "-" as "_" too.
  * @param {string} pkg
  */
 export function displayPackage(pkg) {
-  const m = /^github\.com\/microsoft\/(?:TypeScript\/tsc|typescript-go)\/(.+)$/.exec(pkg);
+  const m = /^github\.com\/microsoft\/(?:TypeScript\/tsc|typescript[-/]go)\/(.+)$/.exec(pkg);
   return m ? m[1] : pkg;
 }
 

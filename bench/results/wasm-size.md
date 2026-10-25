@@ -229,31 +229,31 @@
 
 | package (code, 21656 functions) | size | share |
 |---|---:|---:|
-| github.com/microsoft/typescript/go/internal/checker | 4.50 MB | 18.4% |
-| github.com/microsoft/typescript/go/internal/ls | 2.22 MB | 9.1% |
-| github.com/microsoft/typescript/go/internal/ast | 1.65 MB | 6.7% |
+| internal/checker | 4.50 MB | 18.4% |
+| internal/ls | 2.22 MB | 9.1% |
+| internal/ast | 1.65 MB | 6.7% |
 | runtime | 1.24 MB | 5.1% |
-| github.com/microsoft/typescript/go/internal/transformers/estransforms | 0.85 MB | 3.5% |
-| github.com/microsoft/typescript/go/internal/printer | 0.73 MB | 3.0% |
-| github.com/microsoft/typescript/go/internal/project | 0.65 MB | 2.6% |
-| github.com/microsoft/typescript/go/internal/parser | 0.64 MB | 2.6% |
+| internal/transformers/estransforms | 0.85 MB | 3.5% |
+| internal/printer | 0.73 MB | 3.0% |
+| internal/project | 0.65 MB | 2.6% |
+| internal/parser | 0.64 MB | 2.6% |
 | slices | 0.54 MB | 2.2% |
-| github.com/microsoft/typescript/go/internal/compiler | 0.53 MB | 2.2% |
-| github.com/microsoft/typescript/go/internal/tsoptions | 0.48 MB | 2.0% |
+| internal/compiler | 0.53 MB | 2.2% |
+| internal/tsoptions | 0.48 MB | 2.0% |
 | encoding/json/v2 | 0.46 MB | 1.9% |
-| github.com/microsoft/typescript/go/internal/api | 0.45 MB | 1.9% |
-| github.com/microsoft/typescript/go/internal/ls/autoimport | 0.38 MB | 1.6% |
-| github.com/microsoft/typescript/go/internal/diagnostics | 0.37 MB | 1.5% |
-| github.com/microsoft/typescript/go/internal/lsp/lsproto | 0.37 MB | 1.5% |
-| github.com/microsoft/typescript/go/internal/transformers/declarations | 0.35 MB | 1.4% |
+| internal/api | 0.45 MB | 1.9% |
+| internal/ls/autoimport | 0.38 MB | 1.6% |
+| internal/diagnostics | 0.37 MB | 1.5% |
+| internal/lsp/lsproto | 0.37 MB | 1.5% |
+| internal/transformers/declarations | 0.35 MB | 1.4% |
 | net | 0.34 MB | 1.4% |
-| github.com/microsoft/typescript/go/internal/api/encoder | 0.32 MB | 1.3% |
-| github.com/microsoft/typescript/go/internal/execute/incremental | 0.28 MB | 1.2% |
-| github.com/microsoft/typescript/go/internal/lsp | 0.28 MB | 1.1% |
+| internal/api/encoder | 0.32 MB | 1.3% |
+| internal/execute/incremental | 0.28 MB | 1.2% |
+| internal/lsp | 0.28 MB | 1.1% |
 | reflect | 0.27 MB | 1.1% |
-| github.com/microsoft/typescript/go/internal/transformers/tstransforms | 0.26 MB | 1.1% |
-| github.com/microsoft/typescript/go/internal/module | 0.26 MB | 1.0% |
-| github.com/microsoft/typescript/go/internal/binder | 0.24 MB | 1.0% |
+| internal/transformers/tstransforms | 0.26 MB | 1.1% |
+| internal/module | 0.26 MB | 1.0% |
+| internal/binder | 0.24 MB | 1.0% |
 | (152 others) | 5.88 MB | 24.0% |
 
 | data (100000 segments) | size |

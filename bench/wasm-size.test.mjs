@@ -110,6 +110,10 @@ describe("displayPackage", () => {
   it("shortens the compiler's packages in both 7.0's and 7.1's module", () => {
     assert.equal(displayPackage("github.com/microsoft/TypeScript/tsc/internal/checker"), "internal/checker");
     assert.equal(displayPackage("github.com/microsoft/typescript-go/internal/ls"), "internal/ls");
+    assert.equal(
+      displayPackage(packageOf("github.com_microsoft_typescript_go_internal_checker.NewChecker", "go")),
+      "internal/checker",
+    );
     assert.equal(displayPackage("encoding/json/v2"), "encoding/json/v2");
   });
 });
