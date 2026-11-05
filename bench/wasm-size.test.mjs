@@ -11,6 +11,7 @@ import {
   parseWasm,
   programBytes,
   storedBytes,
+  goFunctionNames,
 } from "./wasm-size.mjs";
 
 /** Encodes an unsigned LEB128 integer. */
@@ -200,5 +201,25 @@ describe("programBytes", () => {
     const before = [...module];
     programBytes(module, parseWasm(module), [[16, 40]]);
     assert.deepEqual([...module], before);
+  });
+});
+
+describe("goFunctionNames", () => {
+  it("reads the names from the pclntab and writes them like the name section", () => {
+    const mem = Buffer.alloc(200);
+    // pcHeader at 0 with two functions; ftab at 40; a _func's nameOffset is at its offset + 4.
+    mem.writeBigUInt64LE(2n, 8);
+    mem.writeUInt32LE(0x1000, 40);
+    mem.writeUInt32LE(24, 44);
+    mem.writeUInt32LE(0x1001, 48);
+    mem.writeUInt32LE(32, 52);
+    mem.writeInt32LE(0, 40 + 24 + 4);
+    mem.writeInt32LE(8, 40 + 32 + 4);
+    mem.write("runtime\0a/b.(*T).m\0", 100, "latin1");
+    const names = goFunctionNames(mem, { pclntab: [0, 40], pclntable: [40, 100], funcnametab: [100, 120] }, 3);
+    assert.deepEqual([...names], [
+      [3, "runtime"],
+      [4, "a_b.__T_.m"],
+    ]);
   });
 });

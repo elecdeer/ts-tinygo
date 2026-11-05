@@ -1,0 +1,22 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@typescript/typescript-wasip1-wasm':
+        specifier: 7.1.0-dev.20261030.1
+        version: 7.1.0-dev.20261030.1
+
+packages:
+
+  '@typescript/typescript-wasip1-wasm@7.1.0-dev.20261030.1':
+    resolution: {integrity: sha512-m3WKNe9Wa0EsTOJXpf1t55hB7TzArcfuiygFi5MgD6EL5xB3eUTN9xNRklv/m0yyXSoVmpqdYNgujjgroCPlNA==}
+
+snapshots:
+
+  '@typescript/typescript-wasip1-wasm@7.1.0-dev.20261030.1': {}

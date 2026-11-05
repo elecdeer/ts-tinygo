@@ -1,0 +1,8 @@
+{
+  "name": "bench-official",
+  "private": true,
+  "description": "Microsoft's official wasip1 build of the TypeScript compiler, for bench/run.sh, bench/sizes.sh and bench/lsp",
+  "dependencies": {
+    "@typescript/typescript-wasip1-wasm": "7.1.0-dev.20261030.1"
+  }
+}

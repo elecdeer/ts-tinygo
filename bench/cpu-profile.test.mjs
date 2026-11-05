@@ -3,6 +3,19 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { byCategory, categoryOf, frameName, selfTimes } from "./cpu-profile.mjs";
 
+describe("frameName", () => {
+  const frame = (functionName) => ({ functionName, url: "wasm://wasm/abc" });
+
+  it("uses the recovered name of a wasm function V8 could not name", () => {
+    assert.equal(frameName(frame("wasm-function[7]"), new Map([[7, "runtime.mallocgc"]])), "runtime.mallocgc");
+  });
+
+  it("keeps V8's name when there is nothing to recover", () => {
+    assert.equal(frameName(frame("wasm-function[7]"), new Map()), "wasm-function[7]");
+    assert.equal(frameName(frame("runtime.mallocgc"), new Map([[7, "other"]])), "runtime.mallocgc");
+  });
+});
+
 describe("categoryOf", () => {
   it("sorts the standard Go runtime's functions", () => {
     assert.equal(categoryOf("runtime.tryDeferToSpanScan"), "GC (marking, sweeping, write barriers)");

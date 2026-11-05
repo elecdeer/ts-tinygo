@@ -16,3 +16,4 @@
 | tsrs-z.wasm | 3.79 MB | 4.99 MB | 1.99 MB |
 | ts-rust.wasm | 0.32 MB | 4.75 MB | 1.86 MB |
 | ts-rust-s.wasm | 0.32 MB | 5.98 MB | 2.27 MB |
+| @typescript/typescript-wasip1-wasm lib/tsc.wasm | 5.01 MB | 47.60 MB | 11.57 MB |

@@ -11,6 +11,7 @@
 | TS7.1 (TinyGo -opt=2) | 29.0 MB | 8.6 MB |
 | TS7.1 (TinyGo, initial memory 2GB) | 21.8 MB | 6.7 MB |
 | TS7.1 (TinyGo -gc=leaking) | 19.2 MB | 5.8 MB |
+| TS7.1 dev (official wasm) | 52.6 MB | 13.2 MB |
 | tsrs | 9.9 MB | 2.9 MB |
 | ts-rust | 5.1 MB | 2.2 MB |
 | tsrs opt-level=z | 8.8 MB | 2.5 MB |

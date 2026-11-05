@@ -1,17 +1,18 @@
 | Command | Mean Wall Time [ms] | Change | Factor |
 |:---|---:|---:|:---|
-| `TS6.0` | 411.0 ± 3.4 |  |  |
-| `TS7.0 (Go)` | 983.5 ± 52.6 | +139.3% | (2.4x slower) |
-| `TS7.0 (TinyGo)` | 1262.5 ± 4.1 | +207.2% | (3.1x slower) |
-| `TS7.0 (TinyGo -opt=2)` | 1392.3 ± 3.8 | +238.8% | (3.4x slower) |
-| `TS7.0 (TinyGo, initial memory 2GB)` | 796.3 ± 3.6 | +93.8% | (1.9x slower) |
-| `TS7.0 (TinyGo -gc=leaking)` | 614.0 ± 3.8 | +49.4% | (1.5x slower) |
-| `TS7.1 (Go)` | 896.1 ± 4.5 | +118.0% | (2.2x slower) |
-| `TS7.1 (TinyGo)` | 863.3 ± 4.3 | +110.1% | (2.1x slower) |
-| `TS7.1 (TinyGo -opt=2)` | 840.6 ± 4.7 | +104.5% | (2.0x slower) |
-| `TS7.1 (TinyGo, initial memory 2GB)` | 723.8 ± 5.6 | +76.1% | (1.8x slower) |
-| `TS7.1 (TinyGo -gc=leaking)` | 554.4 ± 5.9 | +34.9% | (1.3x slower) |
-| `tsrs` | 213.4 ± 1.2 | -48.1% | (1.9x faster) |
-| `ts-rust` | 329.6 ± 3.6 | -19.8% |  |
-| `tsrs opt-level=z` | 240.0 ± 2.0 | -41.6% | (1.7x faster) |
-| `ts-rust opt-level=s` | 296.9 ± 2.0 | -27.8% |  |
+| `TS6.0` | 425.8 ± 10.5 |  |  |
+| `TS7.0 (Go)` | 1046.2 ± 28.8 | +145.7% | (2.5x slower) |
+| `TS7.0 (TinyGo)` | 1266.4 ± 14.4 | +197.4% | (3.0x slower) |
+| `TS7.0 (TinyGo -opt=2)` | 1401.3 ± 15.9 | +229.1% | (3.3x slower) |
+| `TS7.0 (TinyGo, initial memory 2GB)` | 803.8 ± 9.9 | +88.8% | (1.9x slower) |
+| `TS7.0 (TinyGo -gc=leaking)` | 628.2 ± 13.9 | +47.5% | (1.5x slower) |
+| `TS7.1 (Go)` | 900.7 ± 32.5 | +111.5% | (2.1x slower) |
+| `TS7.1 (TinyGo)` | 859.5 ± 10.8 | +101.8% | (2.0x slower) |
+| `TS7.1 (TinyGo -opt=2)` | 849.5 ± 7.0 | +99.5% | (2.0x slower) |
+| `TS7.1 (TinyGo, initial memory 2GB)` | 726.1 ± 7.6 | +70.5% | (1.7x slower) |
+| `TS7.1 (TinyGo -gc=leaking)` | 571.1 ± 2.3 | +34.1% | (1.3x slower) |
+| `TS7.1 dev (official wasm)` | 934.8 ± 12.5 | +119.5% | (2.2x slower) |
+| `tsrs` | 221.9 ± 5.7 | -47.9% | (1.9x faster) |
+| `ts-rust` | 336.0 ± 7.7 | -21.1% |  |
+| `tsrs opt-level=z` | 241.2 ± 2.9 | -43.4% | (1.8x faster) |
+| `ts-rust opt-level=s` | 301.8 ± 2.4 | -29.1% |  |

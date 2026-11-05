@@ -8,6 +8,7 @@ TS 7.1 開発版（ベータ前の main、`aa81492`）で計測した。
 クライアントは `bench/lsp/run.mjs` で、LSP（pull と push の両方の診断）と tsserver 独自のプロトコルを話す。
 
 ```sh
+pnpm --dir bench/official install
 scripts/build-go.sh native && scripts/build-tsrs.sh native && scripts/build-ts-rust.sh native
 bench/lsp/all.sh bench/repos/social-app bench/repos/social-app/src/view/com/composer/Composer.tsx 3
 node bench/lsp/summarize.mjs bench/results/lsp-social-app.jsonl
@@ -26,6 +27,7 @@ social-app で `src/view/com/composer/Composer.tsx`（2,736 行、import 90 件�
 | tsc, TinyGo wasm | 196 ms | 7.53 s | 2.18 s | 応答なし | 応答なし |
 | tsc, TinyGo wasm, 初期メモリ 2GB | 85 ms | 5.32 s | 4.28 s | 応答なし | 応答なし |
 | tsc, Go wasm | 111 ms | 応答なし | – | – | – |
+| tsc, 公式 wasm（7.1.0-dev.20261030.1） | 132 ms | 6.22 s | 2.56 s | 846 ms | 41 ms |
 
 - wasm ビルドは Node.js の WASI 上で動かしている（`scripts/run-wasi.mjs`）。ts-rust と tsrs の wasm ビルドには言語サーバーがない。
 - tsrs は tsc と同じ診断を報告し、チェックは最速だが、補完は tsc の約 2 倍かかり、返す候補は 24,684 件（tsc は 24,699 件）。
@@ -35,5 +37,9 @@ social-app で `src/view/com/composer/Composer.tsx`（2,736 行、import 90 件�
 - TinyGo は補完に一切応答しない。他にすることがないと、サーバーはリクエストを保留したまま CPU 0% で待機する。
   クライアントが 50ms ごとに通知を送ったときだけ応答した（9.7 秒後。その後のホバーは 12ms）。つまりリクエストは、メッセージが届いたときにしか進まない処理を待っている。原因は特定できていない。
 - Go の wasip1 ビルドは `initialize` に応答した後ハングする。Node.js の WASI が stdin について Go のポーラーを起こしていないようだ（未検証）。
+  7.1 beta の `out/tsc-go.wasip1.wasm` でも同じだった。
+- 公式 wasm は同じ標準 Go で同じ `scripts/run-wasi.mjs` 上でも、ハングせずに診断・補完・ホバーのすべてに応答する。tsc ネイティブと同じ 24,699 件の補完候補を返す。wasm のビルドで補完が返るのはこれだけ。
+  7.1 beta との差分には wasip1 対応のコミット（[microsoft/TypeScript#64174](https://github.com/microsoft/TypeScript/pull/64174)）が含まれるが、これがハングを直したのかは切り分けていない。
+- 公式 wasm の行は他の行とは別の回で計測した。編集の 2 回目は他の回より遅く、約 5 秒かかる。
 
 対象リポジトリの用意は[実行時間とメモリ](bench-time-memory.md)を参照。

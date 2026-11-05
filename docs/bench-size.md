@@ -5,8 +5,9 @@
 ## 計測方法
 
 ```sh
-pnpm --dir bench/ts6 install   # TS6 のサイズに使う
-bench/sizes.sh                 # bench/results/sizes.md
+pnpm --dir bench/ts6 install       # TS6 のサイズに使う
+pnpm --dir bench/official install  # 公式の wasip1 ビルド
+bench/sizes.sh                     # bench/results/sizes.md
 ```
 
 ## 配布サイズ
@@ -24,6 +25,7 @@ bench/sizes.sh                 # bench/results/sizes.md
 | TS7.1 (TinyGo) `-opt=2` | 29.0 MB | 8.6 MB |
 | TS7.1 (TinyGo) 初期メモリ 2GB | 21.8 MB | 6.7 MB |
 | TS7.1 (TinyGo) `-gc=leaking` | 19.2 MB | 5.8 MB |
+| TS7.1 dev（公式 wasm） | 52.6 MB | 13.2 MB |
 | tsrs `opt-level=s`（デフォルト） | 9.9 MB | 2.9 MB |
 | ts-rust `opt-level=z`（デフォルト） | 5.1 MB | 2.2 MB |
 | tsrs `opt-level=z` | 8.8 MB | 2.5 MB |
@@ -149,6 +151,25 @@ TS6 の `tsc` の本体（`_tsc.js`）は 6.24 MB で、esbuild で minify す�
 
 範囲をそろえた比較は「TS6 とのサイズの比較」を参照。
 
+## 公式 wasm のサイズ
+
+`@typescript/typescript-wasip1-wasm` 7.1.0-dev.20261030.1 の `lib/tsc.wasm` を、自前の TS7.1 (Go) と比べる。ソースのバージョンが違うので（[ビルド](builds.md)を参照）、差のすべてがビルド方法によるものではない。
+
+```sh
+node bench/wasm-size.mjs bench/official/node_modules/@typescript/typescript-wasip1-wasm/lib/tsc.wasm --embed bench/official/node_modules/@typescript/typescript-wasip1-wasm/lib/*.d.ts <同じコミットの loc/*.json.gz>
+```
+
+| セクション | TS7.1 (Go) | 公式 wasm |
+|---|---:|---:|
+| code | 25.63 MB（gzip 5.79 MB） | 29.18 MB（gzip 7.59 MB） |
+| data | 22.78 MB（gzip 5.40 MB） | 23.38 MB（gzip 5.64 MB） |
+| name | 1.65 MB（gzip 0.21 MB） | なし |
+| 合計 | 50.12 MB（gzip 11.36 MB） | 52.62 MB（gzip 13.17 MB） |
+
+- 公式 wasm には name セクションがないが、関数名は pclntab に残っているので、`bench/wasm-size.mjs` はそこからパッケージごとの内訳を出す。
+- 両方にある 18,498 関数の合計は 24.99 MB から 28.59 MB に 14% 増えている。増え方は関数によって偏り、`(*Node).ForEachChild` は 42 KB から 93 KB に、`(*Checker).checkExpressionWorker` は 8 KB から 40 KB に、`internal/checker` 全体は 4.52 MB から 6.31 MB になった。PGO のインライン展開によるものとみられる（PGO なしの同じソースとは比べていない）。
+- gzip 後の差は 1.81 MB で、生のサイズの差（2.50 MB）より割合が大きい。
+
 ## TS6 とのサイズの比較
 
 wasm の通常のビルド（CLI・言語サーバー・API）と、同じ範囲の TS6 の配布物を比べる。
@@ -192,6 +213,7 @@ TS6 の gzip はファイルごとに圧縮した値の合計。
 | TS7.1 (TinyGo) `-opt=z`（デフォルト）、初期メモリ 2GB | 15.01 MB | 4.80 MB |
 | TS7.1 (TinyGo) `-opt=2` | 22.50 MB | 6.77 MB |
 | TS7.1 (TinyGo) `-gc=leaking` | 12.45 MB | 3.93 MB |
+| TS7.1 dev（公式 wasm） | 47.60 MB | 11.57 MB |
 
 - プログラム本体だけで比べると、minify して gzip した TS6 との差はさらに大きく、TS7.1 の TinyGo は 4.7 倍、Go は 9.3 倍。
   前述の理由（ランタイムと標準ライブラリ、機械語に近い表現、asyncify、圧縮の効きにくさ）で、差の大部分が説明できる。

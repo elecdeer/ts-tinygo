@@ -218,3 +218,63 @@
 |---|---:|---:|
 | module | 13.58 MB | 4.30 MB |
 
+
+## @typescript/typescript-wasip1-wasm lib/tsc.wasm (52.62 MB, go)
+
+| section | size | gzip -9 |
+|---|---:|---:|
+| code | 29.18 MB | 7.59 MB |
+| data | 23.38 MB | 5.64 MB |
+| element | 0.04 MB | 0.04 MB |
+| function | 0.02 MB | 0.00 MB |
+| (others) | 0.00 MB | 0.00 MB |
+
+| package (code, 19082 functions) | size | share |
+|---|---:|---:|
+| internal/checker | 6.31 MB | 21.7% |
+| internal/ls | 2.40 MB | 8.2% |
+| runtime | 1.46 MB | 5.0% |
+| internal/ast | 1.32 MB | 4.5% |
+| internal/project | 0.89 MB | 3.1% |
+| internal/printer | 0.84 MB | 2.9% |
+| internal/api | 0.82 MB | 2.8% |
+| internal/transformers/estransforms | 0.81 MB | 2.8% |
+| internal/tsoptions | 0.79 MB | 2.7% |
+| internal/parser | 0.79 MB | 2.7% |
+| slices | 0.76 MB | 2.6% |
+| internal/compiler | 0.69 MB | 2.4% |
+| encoding/json/v2 | 0.47 MB | 1.6% |
+| internal/lsp/lsproto | 0.47 MB | 1.6% |
+| internal/ls/autoimport | 0.39 MB | 1.3% |
+| internal/transformers/declarations | 0.37 MB | 1.3% |
+| internal/lsp | 0.37 MB | 1.3% |
+| net | 0.35 MB | 1.2% |
+| internal/api/encoder | 0.33 MB | 1.1% |
+| internal/module | 0.33 MB | 1.1% |
+| internal/binder | 0.29 MB | 1.0% |
+| internal/core | 0.29 MB | 1.0% |
+| internal/execute/incremental | 0.29 MB | 1.0% |
+| reflect | 0.27 MB | 0.9% |
+| internal/transformers/tstransforms | 0.26 MB | 0.9% |
+| (155 others) | 6.77 MB | 23.2% |
+
+| data (100000 segments) | size |
+|---|---:|
+| bytes in segments | 22.57 MB |
+| embedded files (129/129 found) | 5.01 MB |
+| rodata | 5.80 MB |
+| pclntab | 12.92 MB |
+| funcnametab | 2.32 MB |
+| cutab | 0.04 MB |
+| filetab | 0.04 MB |
+| pctab | 2.47 MB |
+| pclntable | 1.64 MB |
+| gofunc | 6.40 MB |
+| types | 3.42 MB |
+| noptrdata | 0.18 MB |
+| data | 0.23 MB |
+| rodata: embedded files | 5.01 MB |
+
+| program (no custom sections or embedded files) | size | gzip -9 |
+|---|---:|---:|
+| module | 47.60 MB | 11.57 MB |
