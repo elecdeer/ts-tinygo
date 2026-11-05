@@ -142,7 +142,7 @@ export function parseWasm(bytes) {
     name: names.get(importedFuncs + i) ?? `(func ${importedFuncs + i})`,
     size,
   }));
-  return { sections, functions, segments };
+  return { sections, functions, segments, importedFuncs };
 }
 
 /** Skips a table or memory's limits. */
@@ -233,6 +233,28 @@ export function goRegions(mem) {
     noptrdata: [w(24), w(25)],
     data: [w(26), w(27)],
   };
+}
+
+/**
+ * Recovers function names from the standard Go toolchain's pclntab, for modules built without a
+ * name section. Returns a map from wasm function index to name, written the way the name section
+ * writes it. Go numbers each function's entry PC from 0x1000 in the order of the code section.
+ * @param {Buffer} mem linear memory
+ * @param {{pclntab: [number, number], pclntable: [number, number], funcnametab: [number, number]}} regions
+ * @param {number} importedFuncs how many functions the module imports
+ */
+export function goFunctionNames(mem, regions, importedFuncs) {
+  const funcCount = Number(mem.readBigUInt64LE(regions.pclntab[0] + 8));
+  const table = regions.pclntable[0];
+  const names = new Map();
+  for (let i = 0; i < funcCount; i++) {
+    const entry = mem.readUInt32LE(table + i * 8);
+    const nameOffset = mem.readInt32LE(table + mem.readUInt32LE(table + i * 8 + 4) + 4);
+    const start = regions.funcnametab[0] + nameOffset;
+    const name = mem.toString("latin1", start, mem.indexOf(0, start));
+    names.set(importedFuncs + entry - 0x1000, name.replace(/[^\w.$]/g, "_"));
+  }
+  return names;
 }
 
 /**
@@ -329,6 +351,11 @@ function main(argv) {
   const mem = linearMemory(segments);
   const regions = goRegions(mem);
   const toolchain = regions ? "go" : "tinygo";
+  // A module without a name section still has its function names in the pclntab.
+  if (regions && !sections.some((x) => x.name === 'custom "name"')) {
+    const names = goFunctionNames(mem, regions, parsed.importedFuncs);
+    functions.forEach((f, i) => (f.name = names.get(parsed.importedFuncs + i) ?? f.name));
+  }
 
   console.log(`## ${basename(file)} (${mb(bytes.length)}, ${toolchain})\n`);
   // Each section compressed on its own: a rough guide, since gzip of the whole module shares

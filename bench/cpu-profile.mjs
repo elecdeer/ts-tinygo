@@ -1,10 +1,12 @@
 // Summarize a CPU profile of a wasm build (node --cpu-prof) by kind of work and by function.
-// usage: node bench/cpu-profile.mjs <file.cpuprofile> [--top <n>]
+// usage: node bench/cpu-profile.mjs <file.cpuprofile> [--top <n>] [--wasm <module>]
 // Times are self times: a function's samples count for it, not for its callers.
 // Function names are the wasm name section's, as V8 reports them; the standard Go toolchain
-// writes "/" and "-" in them as "_".
+// writes "/" and "-" in them as "_". --wasm recovers the names of a standard Go module that has
+// no name section from its pclntab; V8 reports those functions as wasm-function[<index>].
 import { readFileSync } from "node:fs";
 import process from "node:process";
+import { goFunctionNames, goRegions, linearMemory, parseWasm } from "./wasm-size.mjs";
 
 /**
  * Kinds of work, tried in order; the first whose pattern matches a function's name wins.
@@ -55,9 +57,25 @@ export const categories = [
  * Returns the name used to classify a profile node: the wasm function's name, or the
  * JavaScript function's name prefixed with "[js] ".
  * @param {{functionName: string, url: string}} callFrame
+ * @param {Map<number, string>} [wasmNames] names of the wasm functions V8 could not name, by index
  */
-export function frameName({ functionName, url }) {
-  return url.startsWith("wasm://") ? functionName : `[js] ${functionName}`;
+export function frameName({ functionName, url }, wasmNames) {
+  if (!url.startsWith("wasm://")) return `[js] ${functionName}`;
+  const index = /^wasm-function\[(\d+)\]$/.exec(functionName)?.[1];
+  return (index && wasmNames?.get(Number(index))) || functionName;
+}
+
+/**
+ * Reads the function names of a standard Go module from its pclntab.
+ * @param {Buffer} bytes the module
+ * @returns {Map<number, string>} names by wasm function index
+ */
+export function readGoNames(bytes) {
+  const { segments, importedFuncs } = parseWasm(bytes);
+  const mem = linearMemory(segments);
+  const regions = goRegions(mem);
+  if (!regions) throw new Error("not a module built by the standard Go toolchain");
+  return goFunctionNames(mem, regions, importedFuncs);
 }
 
 /**
@@ -71,10 +89,11 @@ export function categoryOf(name) {
 /**
  * Sums the self time of every sample by function name.
  * @param {{nodes: {id: number, callFrame: {functionName: string, url: string}}[], samples: number[], timeDeltas: number[]}} profile
+ * @param {Map<number, string>} [wasmNames] names of the wasm functions V8 could not name, by index
  * @returns {{total: number, functions: Map<string, number>}} times in microseconds
  */
-export function selfTimes(profile) {
-  const names = new Map(profile.nodes.map((n) => [n.id, frameName(n.callFrame)]));
+export function selfTimes(profile, wasmNames) {
+  const names = new Map(profile.nodes.map((n) => [n.id, frameName(n.callFrame, wasmNames)]));
   const functions = new Map();
   let total = 0;
   profile.samples.forEach((id, i) => {
@@ -103,11 +122,14 @@ export function byCategory(functions) {
 function main(argv) {
   const file = argv[0];
   if (!file) {
-    console.error("usage: node bench/cpu-profile.mjs <file.cpuprofile> [--top <n>]");
+    console.error("usage: node bench/cpu-profile.mjs <file.cpuprofile> [--top <n>] [--wasm <module>]");
     process.exit(2);
   }
-  const top = argv[1] === "--top" ? Number(argv[2]) : 15;
-  const { total, functions } = selfTimes(JSON.parse(readFileSync(file, "utf8")));
+  const option = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
+  const top = Number(option("--top") ?? 15);
+  const wasm = option("--wasm");
+  const wasmNames = wasm ? readGoNames(readFileSync(wasm)) : undefined;
+  const { total, functions } = selfTimes(JSON.parse(readFileSync(file, "utf8")), wasmNames);
   const pct = (t) => `${((t / total) * 100).toFixed(1)}%`;
 
   console.log(`total ${(total / 1e6).toFixed(1)} s\n`);
