@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs bench/lsp/run.mjs against every language server, one at a time.
 # usage: bench/lsp/all.sh <project-dir> <file> [runs]
-# Prerequisites: the native builds in docs/builds.md, pnpm --dir bench/ts6 install
+# Prerequisites: the native builds in docs/builds.md, pnpm --dir bench/ts6 install, pnpm --dir bench/official install
 set -uo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -25,6 +25,7 @@ servers=(
   "tsc TinyGo wasm, 2GB initial memory|--timeout=60000|$wasi $out/tsc-mem2g.wasip1.wasm --lsp --stdio"
   # Hangs after initialize; one run shows it.
   "tsc Go wasm|--timeout=30000 --runs=1|$wasi $out/tsc-go.wasip1.wasm --lsp --stdio"
+  "tsc official wasm|--timeout=60000|$wasi $root/bench/official/node_modules/@typescript/typescript-wasip1-wasm/lib/tsc.wasm --lsp --stdio"
 )
 
 for entry in "${servers[@]}"; do

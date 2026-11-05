@@ -33,6 +33,7 @@ for v in 7.0 7.1; do
   row "TS$v (TinyGo, initial memory 2GB)" "$out/tsc$s-mem2g.wasip1.wasm"
   row "TS$v (TinyGo -gc=leaking)" "$out/tsc$s-leaking.wasip1.wasm"
 done
+row "TS7.1 dev (official wasm)" "$root/bench/official/node_modules/@typescript/typescript-wasip1-wasm/lib/tsc.wasm"
 row "tsrs" "$out/tsrs.wasm"
 row "ts-rust" "$out/ts-rust.wasm"
 row "tsrs opt-level=z" "$out/tsrs-z.wasm"

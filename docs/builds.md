@@ -25,6 +25,14 @@ wasm バイナリは `out/` にコミットしているので、検証や Playgr
 | `ts-rust.wasm` | ts-rust | Rust | `opt-level=z`（デフォルト） |
 | `ts-rust-s.wasm` | ts-rust | Rust | `opt-level=s` |
 
+公式の wasm は npm から取得する（`pnpm --dir bench/official install`）のでコミットしていない。
+
+| ファイル | コンパイラ | ツールチェーン | 内容 |
+|---|---|---|---|
+| `bench/official/node_modules/@typescript/typescript-wasip1-wasm/lib/tsc.wasm` | TS 7.1.0-dev.20261030.1（`0b0aeb3`） | Go 1.27.3（Microsoft 版） | `-pgo=default.pgo`、`-buildmode=c-shared`、`-trimpath`、name セクションなし |
+
+公式 wasm のビルド設定はバイナリに埋め込まれた Go のビルド情報から読んだ。`vcs.modified=true` なので、公開されたコミットそのままのソースではない。7.1 beta（`3e92363`）から分岐した開発版で、beta にない 36 コミットを含み、beta の 2 コミットを含まない。npm の `latest` タグの版で、`next` はより新しい。
+
 ネイティブバイナリ（`tsc-native`、`tsrs-native`、`ts-rust-native`）は環境に依存するのでコミットしていない。[言語サーバーのベンチマーク](bench-lsp.md)を動かすときはビルドが必要。
 
 ## ビルド方法

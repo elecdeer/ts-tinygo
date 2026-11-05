@@ -4,7 +4,7 @@
 # usage: bench/run.sh <project-dir> <tsconfig> [runs]
 # SKIP_TIMING=1 only measures peak memory.
 # VARIANTS=1 adds the Rust ports' other optimization levels (tsrs opt-level=z, ts-rust opt-level=s).
-# Prerequisites: pnpm --dir bench/ts6 install. The wasm builds are committed in out/; see docs/builds.md.
+# Prerequisites: pnpm --dir bench/ts6 install, pnpm --dir bench/official install. The wasm builds are committed in out/; see docs/builds.md.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,6 +33,8 @@ for v in 7.0 7.1; do
   add "TS$v (TinyGo, initial memory 2GB)" "$wasi $out/tsc$s-mem2g.wasip1.wasm $args --singleThreaded"
   add "TS$v (TinyGo -gc=leaking)" "$wasi $out/tsc$s-leaking.wasip1.wasm $args --singleThreaded"
 done
+# Microsoft's own wasip1 build from npm.
+add "TS7.1 dev (official wasm)" "$wasi $root/bench/official/node_modules/@typescript/typescript-wasip1-wasm/lib/tsc.wasm $args --singleThreaded"
 # The Rust ports' wasm builds are driven by their own JS glue, not WASI's _start.
 tsrs="node --no-warnings $root/scripts/run-tsrs.mjs"
 tsrust="node --no-warnings $root/scripts/run-ts-rust.mjs"
