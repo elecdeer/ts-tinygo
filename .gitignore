@@ -1,2 +1,7 @@
-/out/
+# Re-include out/ because a global gitignore may exclude it; only the wasm builds are committed.
+!/out/
+/out/*
+!/out/*.wasip1.wasm
+!/out/ts-rust*.wasm
+!/out/tsrs*.wasm
 /bench/repos/
